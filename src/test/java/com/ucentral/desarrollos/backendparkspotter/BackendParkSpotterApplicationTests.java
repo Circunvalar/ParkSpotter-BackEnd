@@ -9,5 +9,9 @@ class BackendParkSpotterApplicationTests {
     @Test
     void contextLoads() {
     }
+    @Test
+    void testApplicationStarts() {
+        BackendParkSpotterApplication.main(new String[]{});
 
+    }
 }
