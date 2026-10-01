@@ -1,6 +1,6 @@
 package com.ucentral.desarrollos.backendparkspotter.garageManagement;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.ucentral.desarrollos.backendparkspotter.auth.entity.Role;
 import com.ucentral.desarrollos.backendparkspotter.auth.entity.UserAccount;
 import com.ucentral.desarrollos.backendparkspotter.auth.repository.RoleRepository;
@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.TestPropertySource;
@@ -31,6 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
+@AutoConfigureMockMvc
 @TestPropertySource(locations = "classpath:application.properties")
 class GarageControllerTest {
 

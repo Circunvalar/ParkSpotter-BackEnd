@@ -1,13 +1,20 @@
 package com.ucentral.desarrollos.backendparkspotter.shared.exception;
 
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -37,6 +44,32 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.UNAUTHORIZED, message, request.getRequestURI(), Map.of());
     }
 
+    @ExceptionHandler(EntityNotFoundException.class)
+    public ResponseEntity<ApiError> handleNotFound(EntityNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, ex.getMessage(), request.getRequestURI(), Map.of());
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiError> handleTypeMismatch(MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
+        String message = "Valor inválido para el parámetro '" + ex.getName() + "'";
+        return build(HttpStatus.BAD_REQUEST, message, request.getRequestURI(), Map.of(ex.getName(), String.valueOf(ex.getValue())));
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiError> handleMissingParameter(MissingServletRequestParameterException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "Falta el parámetro '" + ex.getParameterName() + "'", request.getRequestURI(), Map.of());
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ApiError> handleMethodValidation(HandlerMethodValidationException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "Validation failed", request.getRequestURI(), Map.of());
+    }
+
+    @ExceptionHandler({PessimisticLockingFailureException.class, DataIntegrityViolationException.class})
+    public ResponseEntity<ApiError> handleConflict(RuntimeException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "El recurso fue modificado por otra operación, intenta de nuevo", request.getRequestURI(), Map.of());
+    }
+
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ApiError> handleApi(ApiException ex, HttpServletRequest request) {
         return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request.getRequestURI(), Map.of());
@@ -50,6 +83,7 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<ApiError> build(HttpStatus status, String message, String path, Map<String, Object> details) {
-        return ResponseEntity.status(status).body(new ApiError(Instant.now(), status.value(), status.getReasonPhrase(), message, path, details));
+        // Content-Type explícito: el error llega como JSON aunque el cliente pidiera otro formato (ej. SSE).
+        return ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON).body(new ApiError(Instant.now(), status.value(), status.getReasonPhrase(), message, path, details));
     }
 }

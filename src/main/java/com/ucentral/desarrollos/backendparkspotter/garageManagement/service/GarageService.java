@@ -10,7 +10,6 @@ import com.ucentral.desarrollos.backendparkspotter.garageManagement.repository.G
 import com.ucentral.desarrollos.backendparkspotter.shared.exception.ApiException;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +22,7 @@ import java.util.UUID;
 public class GarageService {
 
     private final GarageRepository garageRepository;
+    private final ParkingSpotService parkingSpotService;
 
     @Transactional
     public GarageResponse create(GarageRequest request, UserAccount owner) {
@@ -40,15 +40,17 @@ public class GarageService {
         garage.setPostalCode(request.postalCode());
         garage.setLatitude(request.latitude());
         garage.setLongitude(request.longitude());
-        garage.setTotalSpots(request.totalSpots());
-        garage.setAvailableSpots(request.totalSpots());
         garage.setPricePerHour(request.pricePerHour());
         garage.setOpen24Hours(request.open24Hours());
         garage.setOpeningTime(request.open24Hours() ? null : request.openingTime());
         garage.setClosingTime(request.open24Hours() ? null : request.closingTime());
         garage.setStatus(GarageStatus.ACTIVE);
+        // Cada garaje nace con sus plazas físicas (todas libres); los contadores salen de ellas.
+        parkingSpotService.generateInitialSpots(garage, request.totalSpots());
 
-        return toResponse(garageRepository.save(garage));
+        Garage saved = garageRepository.save(garage);
+        parkingSpotService.publishAvailability(saved);
+        return toResponse(saved);
     }
 
     @Transactional(readOnly = true)
@@ -81,6 +83,10 @@ public class GarageService {
     public GarageResponse update(UUID id, GarageUpdateRequest request, UserAccount user) {
         Garage garage = findEntity(id);
         assertOwnership(garage, user);
+        if (request.availableSpots() != null) {
+            // Desde el Sprint 03 la disponibilidad se deriva del estado de cada plaza.
+            throw new ApiException("availableSpots no se edita directamente: cambia el estado de las plazas en /api/v1/garages/{id}/spots");
+        }
 
         if (request.name() != null) garage.setName(request.name());
         if (request.description() != null) garage.setDescription(request.description());
@@ -94,17 +100,9 @@ public class GarageService {
         if (request.longitude() != null) garage.setLongitude(request.longitude());
         if (request.pricePerHour() != null) garage.setPricePerHour(request.pricePerHour());
 
-        if (request.totalSpots() != null) {
-            if (garage.getAvailableSpots() > request.totalSpots()) {
-                garage.setAvailableSpots(request.totalSpots());
-            }
-            garage.setTotalSpots(request.totalSpots());
-        }
-        if (request.availableSpots() != null) {
-            if (request.availableSpots() > garage.getTotalSpots()) {
-                throw new ApiException("availableSpots no puede ser mayor que totalSpots");
-            }
-            garage.setAvailableSpots(request.availableSpots());
+        boolean capacityChanged = request.totalSpots() != null && !request.totalSpots().equals(garage.getTotalSpots());
+        if (capacityChanged) {
+            parkingSpotService.resize(garage, request.totalSpots());
         }
 
         boolean open24Hours = request.open24Hours() != null ? request.open24Hours() : garage.isOpen24Hours();
@@ -114,7 +112,11 @@ public class GarageService {
         garage.setOpeningTime(open24Hours ? null : times.opening());
         garage.setClosingTime(open24Hours ? null : times.closing());
 
-        return toResponse(garageRepository.save(garage));
+        Garage saved = garageRepository.save(garage);
+        if (capacityChanged) {
+            parkingSpotService.publishAvailability(saved);
+        }
+        return toResponse(saved);
     }
 
     @Transactional
@@ -122,7 +124,9 @@ public class GarageService {
         Garage garage = findEntity(id);
         assertOwnership(garage, user);
         garage.setStatus(status);
-        return toResponse(garageRepository.save(garage));
+        Garage saved = garageRepository.save(garage);
+        parkingSpotService.publishAvailability(saved);
+        return toResponse(saved);
     }
 
     @Transactional
@@ -138,11 +142,7 @@ public class GarageService {
     }
 
     private void assertOwnership(Garage garage, UserAccount user) {
-        boolean isOwner = garage.getOwner().getId().equals(user.getId());
-        boolean isAdmin = user.getRoles().stream().anyMatch(role -> "ROLE_ADMIN".equals(role.getName()));
-        if (!isOwner && !isAdmin) {
-            throw new AccessDeniedException("No tienes permisos sobre este garaje");
-        }
+        GarageAccessPolicy.assertCanManage(garage, user);
     }
 
     private void validateSchedule(boolean open24Hours, LocalTime opening, LocalTime closing) {
@@ -183,11 +183,15 @@ public class GarageService {
                 garage.getLongitude(),
                 garage.getTotalSpots(),
                 garage.getAvailableSpots(),
+                garage.getOccupiedSpots(),
+                garage.getReservedSpots(),
+                garage.getOutOfServiceSpots(),
                 garage.getPricePerHour(),
                 garage.isOpen24Hours(),
                 garage.getOpeningTime(),
                 garage.getClosingTime(),
                 garage.getStatus(),
+                garage.getAvailability(),
                 garage.getCreatedAt(),
                 garage.getUpdatedAt()
         );

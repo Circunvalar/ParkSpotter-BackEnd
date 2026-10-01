@@ -1,5 +1,6 @@
 package com.ucentral.desarrollos.backendparkspotter.garageManagement.dto;
 
+import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.GarageAvailability;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.GarageStatus;
 
 import java.math.BigDecimal;
@@ -27,6 +28,9 @@ public record GarageResponse(
 
         Integer totalSpots,
         Integer availableSpots,
+        Integer occupiedSpots,
+        Integer reservedSpots,
+        Integer outOfServiceSpots,
         BigDecimal pricePerHour,
 
         boolean open24Hours,
@@ -34,6 +38,7 @@ public record GarageResponse(
         LocalTime closingTime,
 
         GarageStatus status,
+        GarageAvailability availability,
         Instant createdAt,
         Instant updatedAt
 ) {
