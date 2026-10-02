@@ -100,8 +100,9 @@ public class GarageSearchService {
                 .sorted(distanceAwareComparator(criteria.sort() == null ? GarageSortOption.DISTANCE : criteria.sort()))
                 .toList();
 
-        int from = Math.min(page * size, inRadius.size());
-        int to = Math.min(from + size, inRadius.size());
+        // Aritmética en long: page * size no puede desbordar aunque llegue una página muy alta.
+        int from = (int) Math.min((long) page * size, inRadius.size());
+        int to = (int) Math.min((long) from + size, inRadius.size());
         return PageResponse.of(inRadius.subList(from, to), page, size, inRadius.size());
     }
 

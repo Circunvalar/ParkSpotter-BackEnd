@@ -11,7 +11,8 @@ class BackendParkSpotterApplicationTests {
     }
     @Test
     void testApplicationStarts() {
-        BackendParkSpotterApplication.main(new String[]{});
+        // Puerto aleatorio: así la prueba no falla si la app ya está corriendo en el 8080.
+        BackendParkSpotterApplication.main(new String[]{"--server.port=0"});
 
     }
 }

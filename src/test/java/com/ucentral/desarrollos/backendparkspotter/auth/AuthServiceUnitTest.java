@@ -18,6 +18,9 @@ import com.ucentral.desarrollos.backendparkspotter.auth.security.JwtService;
 import com.ucentral.desarrollos.backendparkspotter.auth.security.RateLimitService;
 import com.ucentral.desarrollos.backendparkspotter.auth.security.RefreshTokenService;
 import com.ucentral.desarrollos.backendparkspotter.auth.service.AuthService;
+import com.ucentral.desarrollos.backendparkspotter.shared.exception.ApiException;
+import com.ucentral.desarrollos.backendparkspotter.shared.exception.ConflictException;
+import com.ucentral.desarrollos.backendparkspotter.shared.exception.UnauthorizedException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -103,7 +106,7 @@ class AuthServiceUnitTest {
         RegisterRequest request = new RegisterRequest("dup@example.com", "Password123456");
 
         assertThatThrownBy(() -> authService.register(request))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(ConflictException.class);
 
         verify(userRepository, never()).save(any());
         verify(loginAuditRepository, never()).save(any());
@@ -144,7 +147,7 @@ class AuthServiceUnitTest {
     @Test
     void login_WhenClientKeyBlank_ShouldThrow_BeforeTouchingRepository() {
         assertThatThrownBy(() -> authService.login(new LoginRequest("any@example.com", "pw"), " "))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(ApiException.class);
 
         verifyNoInteractions(userRepository);
         verifyNoInteractions(rateLimitService);
@@ -155,8 +158,8 @@ class AuthServiceUnitTest {
         when(userRepository.findByEmailIgnoreCase("ghost@example.com")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> authService.login(new LoginRequest("ghost@example.com", "pw"), "client-2"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Invalid credentials");
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessage("Credenciales inválidas");
 
         verify(rateLimitService).recordFailure("client-2:ghost@example.com");
     }
@@ -168,7 +171,7 @@ class AuthServiceUnitTest {
         when(passwordEncoder.matches("badPassword", "hashed-pw")).thenReturn(false);
 
         assertThatThrownBy(() -> authService.login(new LoginRequest("wrongpw@example.com", "badPassword"), "client-3"))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(UnauthorizedException.class);
 
         verify(rateLimitService).recordFailure("client-3:wrongpw@example.com");
         ArgumentCaptor<LoginAudit> auditCaptor = ArgumentCaptor.forClass(LoginAudit.class);
@@ -185,6 +188,45 @@ class AuthServiceUnitTest {
                 .isInstanceOf(IllegalStateException.class);
 
         verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void login_WhenUserIsDisabled_ShouldThrowSameGenericError_AndRecordFailure() {
+        UserAccount user = user("disabled@example.com", "hashed-pw");
+        user.setEnabled(false);
+        when(userRepository.findByEmailIgnoreCase("disabled@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("rightPassword", "hashed-pw")).thenReturn(true);
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest("disabled@example.com", "rightPassword"), "client-5"))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessage("Credenciales inválidas");
+
+        verify(rateLimitService).recordFailure("client-5:disabled@example.com");
+        verify(refreshTokenService, never()).createRefreshToken(any());
+    }
+
+    @Test
+    void login_WhenUserNotFound_ShouldStillCompareAgainstDummyHash_ToAvoidTimingLeaks() {
+        when(userRepository.findByEmailIgnoreCase("ghost2@example.com")).thenReturn(Optional.empty());
+        when(passwordEncoder.encode(anyString())).thenReturn("dummy-hash");
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest("ghost2@example.com", "pw"), "client-6"))
+                .isInstanceOf(UnauthorizedException.class);
+
+        verify(passwordEncoder).matches("pw", "dummy-hash");
+    }
+
+    @Test
+    void refresh_WhenUserWasDisabled_ShouldThrow() {
+        UserAccount user = user("disabled-refresh@example.com", "hashed-pw");
+        user.setEnabled(false);
+        RefreshToken token = new RefreshToken();
+        token.setUser(user);
+        when(refreshTokenService.findValidToken("raw-token")).thenReturn(Optional.of(token));
+
+        assertThatThrownBy(() -> authService.refresh(new RefreshRequest("raw-token")))
+                .isInstanceOf(UnauthorizedException.class);
+        verify(refreshTokenService, never()).rotate(anyString(), any());
     }
 
     // ---------- me ----------
@@ -227,7 +269,7 @@ class AuthServiceUnitTest {
         when(refreshTokenService.findValidToken("bad-token")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> authService.refresh(new RefreshRequest("bad-token")))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(UnauthorizedException.class);
     }
 
     // ---------- changePassword ----------
@@ -251,7 +293,8 @@ class AuthServiceUnitTest {
 
         assertThatThrownBy(() -> authService.changePassword(
                 new ChangePasswordRequest("wrongOldPass", "newPassword1234"), user))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(ApiException.class)
+                .isNotInstanceOf(UnauthorizedException.class);
 
         verify(userRepository, never()).save(any());
     }

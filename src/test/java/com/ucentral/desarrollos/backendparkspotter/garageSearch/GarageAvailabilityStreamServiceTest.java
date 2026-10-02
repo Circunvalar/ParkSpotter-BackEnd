@@ -5,7 +5,9 @@ import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.Garag
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.GarageStatus;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.event.GarageAvailabilityChangedEvent;
 import com.ucentral.desarrollos.backendparkspotter.garageSearch.realtime.GarageAvailabilityStreamService;
+import com.ucentral.desarrollos.backendparkspotter.shared.exception.ApiException;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.Duration;
@@ -14,10 +16,11 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class GarageAvailabilityStreamServiceTest {
 
-    private final GarageAvailabilityStreamService service = new GarageAvailabilityStreamService(Duration.ofMinutes(1));
+    private final GarageAvailabilityStreamService service = new GarageAvailabilityStreamService(Duration.ofMinutes(1), 3);
 
     @Test
     void subscriptions_AreTrackedPerGarageAndGlobally() {
@@ -42,6 +45,18 @@ class GarageAvailabilityStreamServiceTest {
             service.onAvailabilityChanged(new GarageAvailabilityChangedEvent(snapshot(UUID.randomUUID(), 1)));
             service.heartbeat();
         }).doesNotThrowAnyException();
+    }
+
+    @Test
+    void subscribing_BeyondTheConfiguredLimit_IsRejectedWith503() {
+        service.subscribeAll();
+        service.subscribeAll();
+        service.subscribeAll();
+
+        assertThatThrownBy(service::subscribeAll)
+                .isInstanceOf(ApiException.class)
+                .extracting(ex -> ((ApiException) ex).getStatus())
+                .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
     }
 
     private static GarageAvailabilityResponse snapshot(UUID garageId, int available) {

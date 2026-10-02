@@ -135,7 +135,9 @@ class GarageServiceUnitTest {
         assertThat(response.city()).isEqualTo(garage.getCity());
         assertThat(response.latitude()).isEqualTo(garage.getLatitude());
         assertThat(response.longitude()).isEqualTo(garage.getLongitude());
-        assertThat(response.ownerEmail()).isEqualTo(owner.getEmail());
+        // getById es público: el correo del dueño no se expone (dato personal)
+        assertThat(response.ownerId()).isEqualTo(owner.getId());
+        assertThat(response.ownerEmail()).isNull();
     }
 
     @Test

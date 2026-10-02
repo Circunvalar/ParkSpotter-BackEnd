@@ -11,6 +11,8 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -40,7 +42,9 @@ public class SecurityConfig {
         http.authorizeHttpRequests(auth -> auth
                 .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                 .requestMatchers("/error").permitAll()
-                .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
+                // logout es público: basta el refresh token que se revoca (si el access token ya venció,
+                // exigirlo dejaría el refresh token vivo).
+                .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
                 // "mine" debe ir antes del patrón público /{id} para seguir exigiendo token.
                 .requestMatchers(HttpMethod.GET, "/api/v1/garages/mine").authenticated()
                 // Consulta pública de garajes: búsqueda, mapa, detalle, plazas y tiempo real.
@@ -58,6 +62,17 @@ public class SecurityConfig {
                 .anyRequest().authenticated());
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
+    }
+
+    /**
+     * La autenticación es solo por JWT. Sin este bean, Spring Boot crea un usuario "user" en memoria
+     * con una contraseña generada que además imprime en el log.
+     */
+    @Bean
+    public UserDetailsService userDetailsService() {
+        return username -> {
+            throw new UsernameNotFoundException("La autenticación se hace con JWT");
+        };
     }
 
     @Bean

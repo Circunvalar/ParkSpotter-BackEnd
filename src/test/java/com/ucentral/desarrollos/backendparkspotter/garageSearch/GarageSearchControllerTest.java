@@ -14,6 +14,7 @@ import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -312,6 +313,23 @@ class GarageSearchControllerTest {
         String body = result.getResponse().getContentAsString();
         assertThat(body).contains("\"availableSpots\":49");
         assertThat(body).contains("\"occupiedSpots\":1");
+    }
+
+    /**
+     * Regresión: con open-in-view activo cada stream SSE retenía una conexión del pool (10 en pruebas)
+     * y con más streams que conexiones el resto de la API quedaba bloqueada 30 s y respondía 500.
+     */
+    @Test
+    @Timeout(20)
+    void manyOpenStreams_DoNotExhaustDatabaseConnections() throws Exception {
+        for (int i = 0; i < 15; i++) {
+            mockMvc.perform(get("/api/v1/garages/" + centro.id() + "/availability/stream")
+                            .accept(MediaType.TEXT_EVENT_STREAM))
+                    .andExpect(request().asyncStarted());
+        }
+
+        mockMvc.perform(get("/api/v1/garages/search"))
+                .andExpect(status().isOk());
     }
 
     @Test

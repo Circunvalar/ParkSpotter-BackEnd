@@ -14,7 +14,13 @@ Los contadores del garaje (`availableSpots`, `occupiedSpots`, `reservedSpots`, `
 | `VehicleType` | `CAR`, `MOTORCYCLE`, `BICYCLE`, `TRUCK`, `ELECTRIC`, `DISABLED` |
 | `GarageAvailability` (color del marcador) | `AVAILABLE`, `FEW_SPOTS` (≤ 20% libres), `FULL`, `CLOSED` (garaje inactivo/suspendido) |
 
-> **Cambio respecto al Sprint 02:** `PUT /api/v1/garages/{id}` ya no acepta `availableSpots` (responde 400). Para cambiar la disponibilidad se cambia el estado de las plazas. `totalSpots` sí se puede cambiar: agrega plazas libres o elimina libres/fuera de servicio (nunca ocupadas ni reservadas).
+> **Cambios respecto al Sprint 01/02 que afectan a los fronts:**
+> - `PUT /api/v1/garages/{id}` ya no acepta `availableSpots` (400): la disponibilidad se cambia con el estado de las plazas. `totalSpots` sí se puede cambiar: agrega plazas libres o elimina libres/fuera de servicio (nunca ocupadas ni reservadas).
+> - `POST /api/v1/garages` exige `open24Hours` (`true`/`false`) y valida todos los campos (reglas en [Criterios-de-Calidad.md](Criterios-de-Calidad.md#3-validación-de-entradas)).
+> - Las consultas públicas (`GET /garages`, `/garages/{id}`, `/nearby`) devuelven `ownerEmail: null`; el correo solo llega al dueño (`/mine`, crear, editar).
+> - Registro con correo repetido: **409** (antes 401). Login bloqueado por intentos: **429** (antes 401).
+> - Contraseñas nuevas: 12 a 72 caracteres con al menos una letra y un número.
+> - `POST /auth/logout` ya no requiere access token: basta el refresh token.
 
 ## 1. Búsqueda y listado — `GET /search`
 
@@ -128,15 +134,19 @@ Si la conexión se cae, `EventSource` reconecta solo; en Android, reintentar y v
 
 ## Errores
 
-Siempre JSON (`ApiError`): `{ "timestamp", "status", "error", "message", "path", "details" }`.
+Siempre JSON (`ApiError`): `{ "timestamp", "status", "error", "message", "path", "details" }`. En errores de validación, `details` trae un mensaje en español por cada campo inválido, para mostrarlo junto al campo del formulario.
 
 | Código | Cuándo |
 |---|---|
-| 400 | Parámetros inválidos (`size=500`, `vehicleType=AVION`, `lat` sin `lng`, límites de mapa invertidos, código de plaza repetido) |
-| 401 | Falta token en un endpoint protegido |
+| 400 | Datos o parámetros inválidos (`size=500`, `vehicleType=AVION`, `lat` sin `lng`, límites de mapa invertidos, código de plaza repetido, JSON mal formado) |
+| 401 | Falta token, token vencido o credenciales inválidas |
 | 403 | El usuario no es dueño ni admin del garaje |
-| 404 | Garaje o plaza inexistente |
-| 409 | Conflicto por cambios simultáneos: reintentar |
+| 404 | Garaje, plaza o ruta inexistente |
+| 409 | Correo ya registrado o conflicto por cambios simultáneos: reintentar |
+| 429 | Demasiados intentos de login |
+| 503 | Demasiadas conexiones de tiempo real abiertas: reintentar en unos segundos |
+
+Lista completa en [Criterios-de-Calidad.md](Criterios-de-Calidad.md#4-contrato-de-errores).
 
 ## Notas técnicas (ISO/IEC 25010 / 42010)
 

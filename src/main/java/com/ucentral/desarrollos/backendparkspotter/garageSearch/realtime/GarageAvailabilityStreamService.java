@@ -2,8 +2,10 @@ package com.ucentral.desarrollos.backendparkspotter.garageSearch.realtime;
 
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.dto.GarageAvailabilityResponse;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.event.GarageAvailabilityChangedEvent;
+import com.ucentral.desarrollos.backendparkspotter.shared.exception.ApiException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -30,13 +32,17 @@ public class GarageAvailabilityStreamService {
     private final Map<UUID, Set<SseEmitter>> garageSubscribers = new ConcurrentHashMap<>();
     private final Set<SseEmitter> globalSubscribers = ConcurrentHashMap.newKeySet();
     private final long timeoutMillis;
+    private final int maxSubscribers;
 
-    public GarageAvailabilityStreamService(@Value("${app.garages.stream-timeout:PT30M}") Duration timeout) {
+    public GarageAvailabilityStreamService(@Value("${app.garages.stream-timeout:PT30M}") Duration timeout,
+                                           @Value("${app.garages.stream-max-subscribers:1000}") int maxSubscribers) {
         this.timeoutMillis = timeout.toMillis();
+        this.maxSubscribers = maxSubscribers;
     }
 
     /** Suscripción a los cambios de todos los garajes (para refrescar marcadores del mapa). */
     public SseEmitter subscribeAll() {
+        assertCapacity();
         SseEmitter emitter = new SseEmitter(timeoutMillis);
         register(emitter, globalSubscribers);
         return emitter;
@@ -44,6 +50,7 @@ public class GarageAvailabilityStreamService {
 
     /** Suscripción a un garaje; envía de inmediato su disponibilidad actual. */
     public SseEmitter subscribe(UUID garageId, GarageAvailabilityResponse current) {
+        assertCapacity();
         SseEmitter emitter = new SseEmitter(timeoutMillis);
         Set<SseEmitter> subscribers = garageSubscribers.computeIfAbsent(garageId, id -> ConcurrentHashMap.newKeySet());
         register(emitter, subscribers);
@@ -71,6 +78,17 @@ public class GarageAvailabilityStreamService {
 
     public int subscriberCount() {
         return globalSubscribers.size() + garageSubscribers.values().stream().mapToInt(Set::size).sum();
+    }
+
+    /**
+     * Cada conexión SSE ocupa recursos del servidor mientras está abierta: con el tope se evita
+     * que muchas conexiones (o un cliente malicioso) agoten el servidor. El front debe reintentar luego.
+     */
+    private void assertCapacity() {
+        if (subscriberCount() >= maxSubscribers) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Demasiadas conexiones en tiempo real abiertas, intenta de nuevo en unos segundos");
+        }
     }
 
     private void register(SseEmitter emitter, Set<SseEmitter> subscribers) {

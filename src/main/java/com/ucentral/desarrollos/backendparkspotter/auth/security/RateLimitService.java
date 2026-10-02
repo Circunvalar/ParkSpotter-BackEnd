@@ -1,5 +1,6 @@
 package com.ucentral.desarrollos.backendparkspotter.auth.security;
 
+import com.ucentral.desarrollos.backendparkspotter.shared.exception.TooManyRequestsException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -30,7 +31,7 @@ public class RateLimitService {
     public void assertAllowed(String key) {
         AttemptWindow window = windows.get(key);
         if (window != null && window.lockedUntil != null && window.lockedUntil.isAfter(Instant.now())) {
-            throw new IllegalStateException("Too many login attempts. Try again later.");
+            throw new TooManyRequestsException("Demasiados intentos de inicio de sesión. Intenta de nuevo más tarde.");
         }
     }
 
