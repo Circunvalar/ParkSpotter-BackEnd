@@ -19,8 +19,10 @@
         <java.version>21</java.version>
         <jjwt.version>0.12.6</jjwt.version>
         <jacoco.version>0.8.13</jacoco.version>
-        <!-- Criterio de calidad: cobertura mínima de líneas exigida por mvn verify -->
-        <coverage.minimum>0.80</coverage.minimum>
+        <!-- Criterios de calidad: cobertura mínima exigida por mvn verify (y por la CI) -->
+        <coverage.lines.minimum>0.90</coverage.lines.minimum>
+        <coverage.branches.minimum>0.85</coverage.branches.minimum>
+        <coverage.methods.minimum>0.95</coverage.methods.minimum>
     </properties>
 
     <dependencies>
@@ -148,7 +150,17 @@
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>${coverage.minimum}</minimum>
+                                            <minimum>${coverage.lines.minimum}</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${coverage.branches.minimum}</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>METHOD</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${coverage.methods.minimum}</minimum>
                                         </limit>
                                     </limits>
                                 </rule>

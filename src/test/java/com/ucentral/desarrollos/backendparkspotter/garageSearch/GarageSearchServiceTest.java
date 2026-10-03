@@ -242,11 +242,51 @@ class GarageSearchServiceTest {
                 .containsExactly("Garaje Centro", "Parqueadero Chapinero");
     }
 
+    @Test
+    void geoSearch_SupportsEverySortOption() {
+        GarageSearchCriteriaBuilder near = criteria().near(CENTER_LAT, CENTER_LNG).radiusKm(10.0);
+
+        assertThat(names(near.sort(GarageSortOption.PRICE_DESC).build()))
+                .containsExactly("Parqueadero Chapinero", "Garaje Centro", "Garaje Nocturno Usaquén");
+        assertThat(names(near.sort(GarageSortOption.AVAILABILITY).build()))
+                .containsExactly("Garaje Centro", "Parqueadero Chapinero", "Garaje Nocturno Usaquén");
+        assertThat(names(near.sort(GarageSortOption.NAME).build()))
+                .containsExactly("Garaje Centro", "Garaje Nocturno Usaquén", "Parqueadero Chapinero");
+        // NEWEST con ubicación conserva el orden por distancia
+        assertThat(names(near.sort(GarageSortOption.NEWEST).build()))
+                .containsExactly("Garaje Centro", "Garaje Nocturno Usaquén", "Parqueadero Chapinero");
+    }
+
+    @Test
+    void sortByNewest_WithoutLocation_ReturnsEveryActiveGarage() {
+        assertThat(names(criteria().sort(GarageSortOption.NEWEST).build())).hasSize(4);
+    }
+
+    @Test
+    void blankTextFilters_AreIgnored() {
+        assertThat(names(criteria().q("   ").city(" ").build())).hasSize(4);
+    }
+
     // ---------- validaciones ----------
 
     @Test
     void latWithoutLng_IsRejected() {
         assertThatThrownBy(() -> searchService.search(criteria().lat(4.7).build())).isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void lngWithoutLat_IsRejected() {
+        GarageSearchCriteria onlyLng = new GarageSearchCriteria(null, null, null, null, null, null, null, null, null,
+                null, -74.0, null, null, null, null);
+
+        assertThatThrownBy(() -> searchService.search(onlyLng)).isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void map_WithInvertedLongitudes_IsRejected() {
+        MapBoundsRequest inverted = new MapBoundsRequest(4.5, -73.9, 4.8, -74.2, null);
+
+        assertThatThrownBy(() -> searchService.mapMarkers(inverted, criteria().build())).isInstanceOf(ApiException.class);
     }
 
     @Test

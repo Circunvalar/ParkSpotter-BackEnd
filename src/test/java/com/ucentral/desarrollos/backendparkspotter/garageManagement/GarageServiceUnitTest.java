@@ -392,6 +392,87 @@ class GarageServiceUnitTest {
         verify(garageRepository).findNearby(4.710989, -74.072092, 5.0);
     }
 
+    // ---------- ramas adicionales de update / create ----------
+
+    @Test
+    void update_WithAllFields_ShouldApplyThemTrimmed_AndSwitchTo24Hours() {
+        UserAccount owner = user("owner20@example.com");
+        Garage garage = garage(owner, 5, 5, false, GarageStatus.ACTIVE);
+        when(garageRepository.findById(garage.getId())).thenReturn(Optional.of(garage));
+
+        GarageUpdateRequest update = new GarageUpdateRequest(
+                "  Nuevo  ", "", " 3009998877 ", " Calle 1 # 2-3 ", " Cali ", " Valle ", " Colombia ", " 760001 ",
+                3.4516, -76.5320, null, null, BigDecimal.valueOf(2800), true, null, null
+        );
+
+        GarageResponse updated = garageService.update(garage.getId(), update, owner);
+
+        assertThat(updated.name()).isEqualTo("Nuevo");
+        assertThat(updated.description()).isNull();
+        assertThat(updated.phone()).isEqualTo("3009998877");
+        assertThat(updated.addressLine()).isEqualTo("Calle 1 # 2-3");
+        assertThat(updated.city()).isEqualTo("Cali");
+        assertThat(updated.state()).isEqualTo("Valle");
+        assertThat(updated.country()).isEqualTo("Colombia");
+        assertThat(updated.postalCode()).isEqualTo("760001");
+        assertThat(updated.latitude()).isEqualTo(3.4516);
+        assertThat(updated.longitude()).isEqualTo(-76.5320);
+        assertThat(updated.open24Hours()).isTrue();
+        assertThat(updated.openingTime()).isNull();
+    }
+
+    @Test
+    void update_WithOnlyOpeningTime_ShouldKeepCurrentClosingTime() {
+        UserAccount owner = user("owner21@example.com");
+        Garage garage = garage(owner, 5, 5, false, GarageStatus.ACTIVE); // 08:00 - 20:00
+        when(garageRepository.findById(garage.getId())).thenReturn(Optional.of(garage));
+
+        GarageUpdateRequest update = new GarageUpdateRequest(null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, LocalTime.of(9, 0), null);
+
+        GarageResponse updated = garageService.update(garage.getId(), update, owner);
+
+        assertThat(updated.openingTime()).isEqualTo(LocalTime.of(9, 0));
+        assertThat(updated.closingTime()).isEqualTo(LocalTime.of(20, 0));
+    }
+
+    @Test
+    void update_WithSameTotalSpots_ShouldNotResizeNorPublishAvailability() {
+        UserAccount owner = user("owner22@example.com");
+        Garage garage = garage(owner, 5, 5, true, GarageStatus.ACTIVE);
+        when(garageRepository.findById(garage.getId())).thenReturn(Optional.of(garage));
+
+        GarageUpdateRequest update = new GarageUpdateRequest(null, null, null, null, null, null, null, null,
+                null, null, 5, null, null, null, null, null);
+
+        garageService.update(garage.getId(), update, owner);
+
+        verify(eventPublisher, never()).publishEvent(any());
+        verify(spotRepository, never()).save(any());
+    }
+
+    @Test
+    void create_WithEqualOpeningAndClosing_ShouldThrow() {
+        UserAccount owner = user("owner23@example.com");
+
+        assertThatThrownBy(() -> garageService.create(validRequest(false, LocalTime.NOON, LocalTime.NOON), owner))
+                .isInstanceOf(ApiException.class);
+        verify(garageRepository, never()).save(any());
+    }
+
+    @Test
+    void create_ShouldStoreBlankOptionalFieldsAsNull() {
+        UserAccount owner = user("owner24@example.com");
+        GarageRequest request = new GarageRequest("Garaje", "   ", null, "Cra 7 # 1-01", "Bogotá", "Cundinamarca",
+                "Colombia", " ", 4.71, -74.07, 2, BigDecimal.ONE, true, null, null);
+
+        GarageResponse response = garageService.create(request, owner);
+
+        assertThat(response.description()).isNull();
+        assertThat(response.phone()).isNull();
+        assertThat(response.postalCode()).isNull();
+    }
+
     // ---------- helpers ----------
 
     private GarageRequest validRequest(boolean open24Hours, LocalTime openingTime, LocalTime closingTime) {

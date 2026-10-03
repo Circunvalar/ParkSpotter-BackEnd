@@ -45,6 +45,11 @@ class GarageAvailabilityRulesTest {
         assertThat(OpeningHours.isOpenAt(false, null, EIGHTEEN, LocalTime.NOON)).isFalse();
     }
 
+    @Test
+    void sameOpeningAndClosing_IsTreatedAsOpenAllDay() {
+        assertThat(OpeningHours.isOpenAt(false, EIGHT, EIGHT, LocalTime.of(3, 0))).isTrue();
+    }
+
     // ---------- GarageAvailability ----------
 
     @Test

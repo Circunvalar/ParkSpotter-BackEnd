@@ -141,6 +141,25 @@ class GarageRequestValidationTest {
         assertThat(invalidFields(request)).contains("scheduleValid");
     }
 
+    @Test
+    void update_LocationRules() {
+        assertThat(invalidFields(updateLocation(0.0, 0.0))).contains("locationProvided");
+        assertThat(invalidFields(updateLocation(0.0, -74.0))).doesNotContain("locationProvided");
+        assertThat(invalidFields(updateLocation(4.7, null))).isEmpty();
+        assertThat(invalidFields(updateLocation(null, -74.0))).isEmpty();
+    }
+
+    @Test
+    void create_OnlyOneCoordinateAtZero_IsValid() {
+        assertThat(invalidFields(builder().location(0.0, -74.0).build())).doesNotContain("locationProvided");
+        assertThat(invalidFields(builder().location(4.7, 0.0).build())).doesNotContain("locationProvided");
+    }
+
+    private static GarageUpdateRequest updateLocation(Double lat, Double lng) {
+        return new GarageUpdateRequest(null, null, null, null, null, null, null, null,
+                lat, lng, null, null, null, null, null, null);
+    }
+
     // ---------- ParkingSpotRequest ----------
 
     @Test

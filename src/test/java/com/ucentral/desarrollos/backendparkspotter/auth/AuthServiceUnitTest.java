@@ -229,6 +229,25 @@ class AuthServiceUnitTest {
         verify(refreshTokenService, never()).rotate(anyString(), any());
     }
 
+    @Test
+    void login_WhenClientKeyNull_ShouldThrow() {
+        assertThatThrownBy(() -> authService.login(new LoginRequest("any@example.com", "pw"), null))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void login_DummyHashIsGeneratedOnlyOnce() {
+        when(userRepository.findByEmailIgnoreCase(anyString())).thenReturn(Optional.empty());
+        when(passwordEncoder.encode(anyString())).thenReturn("dummy-hash");
+
+        for (int i = 0; i < 3; i++) {
+            assertThatThrownBy(() -> authService.login(new LoginRequest("ghost3@example.com", "pw"), "client-7"))
+                    .isInstanceOf(UnauthorizedException.class);
+        }
+
+        verify(passwordEncoder, times(1)).encode(anyString());
+    }
+
     // ---------- me ----------
 
     @Test

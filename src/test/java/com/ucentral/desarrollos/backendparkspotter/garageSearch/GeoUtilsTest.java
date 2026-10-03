@@ -46,6 +46,14 @@ class GeoUtilsTest {
     }
 
     @Test
+    void boundingBox_AtThePole_CoversEveryLongitude() {
+        BoundingBox box = GeoUtils.boundingBox(90.0, 0.0, 5);
+
+        assertThat(box.minLng()).isEqualTo(-180.0);
+        assertThat(box.maxLng()).isEqualTo(180.0);
+    }
+
+    @Test
     void roundKm_RoundsToMeters() {
         assertThat(GeoUtils.roundKm(1.23456)).isEqualTo(1.235);
     }

@@ -61,6 +61,12 @@ class AuthRequestValidationTest {
     }
 
     @Test
+    void changePassword_WithMissingValues_OnlyReportsRequiredFields() {
+        assertThat(invalidFields(new ChangePasswordRequest(null, null)))
+                .containsExactlyInAnyOrder("currentPassword", "newPassword");
+    }
+
+    @Test
     void refreshAndLogout_RequireOpaqueTokenFormat() {
         assertThat(invalidFields(new RefreshRequest("abcDEF123_-xyz"))).isEmpty();
         assertThat(invalidFields(new RefreshRequest(""))).contains("refreshToken");

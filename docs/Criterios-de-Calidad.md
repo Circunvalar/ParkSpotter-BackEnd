@@ -7,19 +7,21 @@ Referencias: **ISO/IEC 25010** (calidad del producto) e **ISO/IEC 42010** (arqui
 
 Un cambio está terminado cuando:
 
-1. `./mvnw verify` termina en **BUILD SUCCESS**: todas las pruebas pasan y la cobertura de líneas es **≥ 80 %** (JaCoCo hace fallar el build si baja).
-2. Todo campo de entrada nuevo tiene validación (sección 3) y una prueba que la cubre.
-3. Los errores siguen el contrato de la sección 4 (JSON `ApiError`, código HTTP correcto, mensaje en español).
-4. Las consultas nuevas filtran en la base de datos (no en memoria) y tienen índice si filtran por columnas nuevas.
-5. El smoke test (`scripts/smoke-test.sh`) pasa contra un entorno con PostgreSQL.
+1. La **CI de GitHub Actions está en verde** (ver [Automatizacion-de-Pruebas.md](Automatizacion-de-Pruebas.md)): equivale a que `./mvnw verify` termine en **BUILD SUCCESS** y a que el smoke test pase contra PostgreSQL.
+2. Todas las pruebas pasan y la cobertura cumple los mínimos que exige JaCoCo: **líneas ≥ 90 %, ramas ≥ 85 %, métodos ≥ 95 %**. El build falla si baja.
+3. Todo método nuevo tiene al menos una prueba, y todo campo de entrada nuevo tiene validación (sección 3) con una prueba que la cubre.
+4. Los errores siguen el contrato de la sección 4 (JSON `ApiError`, código HTTP correcto, mensaje en español).
+5. Las consultas nuevas filtran en la base de datos (no en memoria) y tienen índice si filtran por columnas nuevas.
 6. La documentación de la API para los fronts está actualizada (`docs/`).
 
 ## 2. Cómo verificar
 
+La CI lo hace sola en cada push y pull request. Para verificarlo en tu PC:
+
 ```bash
 ./mvnw verify
 ```
-Corre las pruebas (unitarias, integración con H2, API con MockMvc y rendimiento) y el control de cobertura. Reporte de cobertura: `target/site/jacoco/index.html`.
+Corre las pruebas (unitarias, integración con H2, API con MockMvc, servidor HTTP real y rendimiento) y el control de cobertura. Reporte de cobertura: `target/site/jacoco/index.html`. Resumen en consola: `python scripts/ci-summary.py`.
 
 ```bash
 BASE_URL=http://localhost:8080 ./scripts/smoke-test.sh
@@ -129,7 +131,28 @@ Toda respuesta de error es JSON, incluso si el cliente pidió otro formato (por 
 
 ## 7. Evidencia de la última verificación (Sprint 03)
 
-**Pruebas automáticas:** 248 pruebas, 0 fallas. Cobertura de líneas 94,5 % y de ramas 77,8 % (umbral: 80 % de líneas).
+**Pruebas automáticas:** 326 pruebas en 27 clases, 0 fallas.
+
+| Cobertura | Resultado | Mínimo exigido |
+|---|---|---|
+| Métodos | **100 %** (290/290) | 95 % |
+| Líneas | **99,8 %** (968/970) | 90 % |
+| Ramas | **97,6 %** (369/378) | 85 % |
+| Clases | **100 %** (68/68) | — |
+
+Las 2 líneas sin cubrir son el `catch` de "SHA-256 no disponible" en `RefreshTokenService`: es inalcanzable, porque la especificación de Java obliga a que SHA-256 exista. Las ramas parciales son combinaciones de chequeos de nulos que ya validan otras capas.
+
+**Tipos de prueba:**
+
+| Tipo | Qué cubre | Clases |
+|---|---|---|
+| Unitarias (sin Spring) | Servicios, reglas de negocio, utilidades, configuración, manejador de errores | `*UnitTest`, `RateLimitServiceTest`, `RefreshTokenServiceTest`, `GeoUtilsTest`, `GarageAvailabilityRulesTest`, `ConfigTest`, `GlobalExceptionHandlerTest` |
+| Validación campo por campo | Reglas de la sección 3 | `*ValidationTest`, `PasswordPolicyValidatorTest` |
+| Integración (Spring + H2) | Consultas SQL, transacciones, filtros de búsqueda | `GarageServiceTest`, `GarageSearchServiceTest`, `AuthServiceTest` |
+| API (MockMvc) | Endpoints, seguridad, permisos, contrato de errores, CORS | `*ControllerTest`, `GarageManagementApiTest`, `AuthFlowTest`, `ApiQualityCriteriaTest` |
+| Servidor HTTP real | Desconexión y vencimiento de streams SSE | `GarageAvailabilityStreamIntegrationTest` |
+| Rendimiento | Respuesta < 3 s con 1.000 garajes | `GarageSearchPerformanceTest` |
+| Punta a punta (PostgreSQL) | Flujo completo contra la API desplegada | `scripts/smoke-test.sh` (44 verificaciones) |
 
 **PostgreSQL 18.6 real**, clúster temporal y aislado:
 

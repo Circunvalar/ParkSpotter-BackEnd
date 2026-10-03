@@ -2,6 +2,7 @@ package com.ucentral.desarrollos.backendparkspotter.auth;
 
 import com.jayway.jsonpath.JsonPath;
 import com.ucentral.desarrollos.backendparkspotter.auth.entity.Role;
+import com.ucentral.desarrollos.backendparkspotter.auth.entity.UserAccount;
 import com.ucentral.desarrollos.backendparkspotter.auth.repository.RefreshTokenRepository;
 import com.ucentral.desarrollos.backendparkspotter.auth.repository.RoleRepository;
 import com.ucentral.desarrollos.backendparkspotter.auth.repository.UserRepository;
@@ -18,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -119,5 +121,58 @@ class AuthFlowTest {
         mockMvc.perform(get("/api/v1/admin/secret").header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
+    void adminEndpoint_ForAdmin_Returns200() throws Exception {
+        String accessToken = register("jefe@parkspotter.co");
+        Role adminRole = new Role();
+        adminRole.setName("ROLE_ADMIN");
+        roleRepository.save(adminRole);
+        UserAccount admin = userRepository.findByEmailIgnoreCase("jefe@parkspotter.co").orElseThrow();
+        admin.getRoles().add(adminRole);
+        userRepository.save(admin);
+
+        mockMvc.perform(get("/api/v1/admin/secret").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(content().string("secret"));
+    }
+
+    @Test
+    void stillValidToken_OfDisabledUser_IsRejected() throws Exception {
+        String accessToken = register("bloqueado@parkspotter.co");
+        UserAccount user = userRepository.findByEmailIgnoreCase("bloqueado@parkspotter.co").orElseThrow();
+        user.setEnabled(false);
+        userRepository.save(user);
+
+        mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void stillValidToken_OfDeletedUser_IsRejected() throws Exception {
+        String accessToken = register("borrado@parkspotter.co");
+        refreshTokenRepository.deleteAll();
+        userRepository.deleteAll();
+
+        mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void login_WithInvalidBody_ListsTheInvalidFields() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"no-es-correo\",\"password\":\"\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.details.email").exists())
+                .andExpect(jsonPath("$.details.password").exists());
+    }
+
+    private String register(String email) throws Exception {
+        String registered = mockMvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + email + "\",\"password\":\"Password123!\"}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.read(registered, "$.accessToken");
     }
 }

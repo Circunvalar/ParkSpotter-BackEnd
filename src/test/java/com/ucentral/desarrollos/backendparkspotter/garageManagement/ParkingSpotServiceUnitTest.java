@@ -298,6 +298,104 @@ class ParkingSpotServiceUnitTest {
         assertThatThrownBy(() -> service.list(id, null, null)).isInstanceOf(EntityNotFoundException.class);
     }
 
+    // ---------- ramas adicionales ----------
+
+    @Test
+    void resize_ToTheSameSize_ShouldNotChangeSpots() {
+        Garage garage = persistedGarage(3);
+
+        service.resize(garage, 3);
+
+        assertThat(garage.getSpots()).hasSize(3);
+    }
+
+    @Test
+    void backfill_IgnoresGaragesWithoutCapacity_AndTreatsMissingAvailableAsAllFree() {
+        Garage empty = legacyGarage(0, 0);
+        Garage noCounters = legacyGarage(3, 0);
+        noCounters.setAvailableSpots(null);
+        when(garageRepository.findGaragesWithoutSpots()).thenReturn(List.of(empty, noCounters));
+
+        service.backfillLegacyGarages();
+
+        assertThat(empty.getSpots()).isEmpty();
+        assertThat(noCounters.getAvailableSpots()).isEqualTo(3);
+    }
+
+    @Test
+    void add_WithExplicitCodeOnly_ShouldNormalizeItAndUseDefaults() {
+        Garage garage = persistedGarage(1);
+        when(garageRepository.findByIdForUpdate(garage.getId())).thenReturn(Optional.of(garage));
+
+        ParkingSpotResponse response = service.add(garage.getId(), new ParkingSpotRequest(" vip-1 ", null, null), owner);
+
+        assertThat(response.code()).isEqualTo("VIP-1");
+        assertThat(response.floor()).isEqualTo(1);
+        assertThat(response.vehicleType()).isEqualTo(VehicleType.CAR);
+    }
+
+    @Test
+    void update_WithNullFields_ShouldKeepValues_AndAllowKeepingItsOwnCode() {
+        Garage garage = persistedGarage(2);
+        when(garageRepository.findByIdForUpdate(garage.getId())).thenReturn(Optional.of(garage));
+        ParkingSpot target = spot(garage, "P-001");
+
+        ParkingSpotResponse unchanged = service.update(garage.getId(), target.getId(), new ParkingSpotRequest(null, null, null), owner);
+        ParkingSpotResponse sameCode = service.update(garage.getId(), target.getId(), new ParkingSpotRequest("p-001", null, null), owner);
+
+        assertThat(unchanged.code()).isEqualTo("P-001");
+        assertThat(unchanged.floor()).isEqualTo(1);
+        assertThat(sameCode.code()).isEqualTo("P-001");
+    }
+
+    @Test
+    void update_WithCodeOfAnotherSpot_ShouldThrow() {
+        Garage garage = persistedGarage(2);
+        when(garageRepository.findByIdForUpdate(garage.getId())).thenReturn(Optional.of(garage));
+
+        assertThatThrownBy(() -> service.update(garage.getId(), spot(garage, "P-001").getId(),
+                new ParkingSpotRequest("P-002", null, null), owner))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void delete_WhenSpotIsReserved_ShouldThrow() {
+        Garage garage = persistedGarage(2);
+        when(garageRepository.findByIdForUpdate(garage.getId())).thenReturn(Optional.of(garage));
+        spot(garage, "P-002").setStatus(SpotStatus.RESERVED);
+
+        assertThatThrownBy(() -> service.delete(garage.getId(), spot(garage, "P-002").getId(), owner))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void operationsOnUnknownGarage_ShouldThrowNotFound() {
+        UUID unknown = UUID.randomUUID();
+        when(garageRepository.findByIdForUpdate(unknown)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.changeStatus(unknown, UUID.randomUUID(), SpotStatus.OCCUPIED, owner))
+                .isInstanceOf(EntityNotFoundException.class);
+    }
+
+    @Test
+    void anonymousUser_CannotManageSpots() {
+        Garage garage = persistedGarage(1);
+        when(garageRepository.findByIdForUpdate(garage.getId())).thenReturn(Optional.of(garage));
+
+        assertThatThrownBy(() -> service.changeStatus(garage.getId(), spot(garage, "P-001").getId(), SpotStatus.OCCUPIED, null))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void list_DelegatesFiltersToRepository() {
+        Garage garage = persistedGarage(2);
+        when(garageRepository.existsById(garage.getId())).thenReturn(true);
+        when(spotRepository.findByGarageFiltered(garage.getId(), SpotStatus.AVAILABLE, VehicleType.CAR))
+                .thenReturn(garage.getSpots());
+
+        assertThat(service.list(garage.getId(), SpotStatus.AVAILABLE, VehicleType.CAR)).hasSize(2);
+    }
+
     // ---------- helpers ----------
 
     private Garage newGarage() {
