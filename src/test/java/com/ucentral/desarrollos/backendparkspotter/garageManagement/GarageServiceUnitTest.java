@@ -6,23 +6,32 @@ import com.ucentral.desarrollos.backendparkspotter.garageManagement.dto.GarageRe
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.dto.GarageResponse;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.dto.GarageUpdateRequest;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.Garage;
+import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.GarageAvailability;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.GarageStatus;
+import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.SpotStatus;
+import com.ucentral.desarrollos.backendparkspotter.garageManagement.event.GarageAvailabilityChangedEvent;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.repository.GarageRepository;
+import com.ucentral.desarrollos.backendparkspotter.garageManagement.repository.ParkingSpotRepository;
+import com.ucentral.desarrollos.backendparkspotter.garageManagement.service.GarageAvailabilityAssembler;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.service.GarageService;
+import com.ucentral.desarrollos.backendparkspotter.garageManagement.service.ParkingSpotService;
 import com.ucentral.desarrollos.backendparkspotter.shared.exception.ApiException;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
@@ -38,20 +47,26 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Pruebas unitarias puras de GarageService: el repositorio va mockeado
- * (sin Spring, sin base de datos). Cada método se puede correr individualmente con @Test.
+ * Pruebas unitarias puras de GarageService: los repositorios van mockeados
+ * (sin Spring, sin base de datos). ParkingSpotService es real para validar la sincronización de plazas. Cada método se puede correr individualmente con @Test.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class GarageServiceUnitTest {
 
     @Mock GarageRepository garageRepository;
+    @Mock ParkingSpotRepository spotRepository;
+    @Mock ApplicationEventPublisher eventPublisher;
 
-    @InjectMocks
     GarageService garageService;
 
     @BeforeEach
     void defaultStubs() {
+        Clock clock = Clock.fixed(Instant.parse("2026-09-30T15:00:00Z"), ZoneId.of("America/Bogota"));
+        ParkingSpotService parkingSpotService = new ParkingSpotService(
+                garageRepository, spotRepository, new GarageAvailabilityAssembler(clock), eventPublisher);
+        garageService = new GarageService(garageRepository, parkingSpotService);
+
         when(garageRepository.save(any(Garage.class))).thenAnswer(inv -> {
             Garage g = inv.getArgument(0);
             if (g.getId() == null) g.setId(UUID.randomUUID());
@@ -76,6 +91,10 @@ class GarageServiceUnitTest {
         ArgumentCaptor<Garage> captor = ArgumentCaptor.forClass(Garage.class);
         verify(garageRepository).save(captor.capture());
         assertThat(captor.getValue().getOwner()).isEqualTo(owner);
+        // Se generan las plazas físicas, todas libres, y se notifica la disponibilidad
+        assertThat(captor.getValue().getSpots()).hasSize(50)
+                .allMatch(spot -> spot.getStatus() == SpotStatus.AVAILABLE);
+        verify(eventPublisher).publishEvent(any(GarageAvailabilityChangedEvent.class));
     }
 
     @Test
@@ -116,7 +135,9 @@ class GarageServiceUnitTest {
         assertThat(response.city()).isEqualTo(garage.getCity());
         assertThat(response.latitude()).isEqualTo(garage.getLatitude());
         assertThat(response.longitude()).isEqualTo(garage.getLongitude());
-        assertThat(response.ownerEmail()).isEqualTo(owner.getEmail());
+        // getById es público: el correo del dueño no se expone (dato personal)
+        assertThat(response.ownerId()).isEqualTo(owner.getId());
+        assertThat(response.ownerEmail()).isNull();
     }
 
     @Test
@@ -149,7 +170,7 @@ class GarageServiceUnitTest {
     }
 
     @Test
-    void update_WhenTotalSpotsReducedBelowCurrentAvailable_ShouldClampAvailableSpots() {
+    void update_WhenTotalSpotsReduced_ShouldRemoveFreeSpotsAndRecalculateAvailability() {
         UserAccount owner = user("owner6@example.com");
         Garage garage = garage(owner, 50, 50, true, GarageStatus.ACTIVE);
         when(garageRepository.findById(garage.getId())).thenReturn(Optional.of(garage));
@@ -163,6 +184,23 @@ class GarageServiceUnitTest {
 
         assertThat(updated.totalSpots()).isEqualTo(10);
         assertThat(updated.availableSpots()).isEqualTo(10);
+        assertThat(garage.getSpots()).hasSize(10);
+    }
+
+    @Test
+    void update_WhenAvailableSpotsSentDirectly_ShouldThrow_BecauseItIsDerivedFromSpots() {
+        UserAccount owner = user("owner6b@example.com");
+        Garage garage = garage(owner, 50, 50, true, GarageStatus.ACTIVE);
+        when(garageRepository.findById(garage.getId())).thenReturn(Optional.of(garage));
+
+        GarageUpdateRequest update = new GarageUpdateRequest(
+                null, null, null, null, null, null, null, null,
+                null, null, null, 20, null, null, null, null
+        );
+
+        assertThatThrownBy(() -> garageService.update(garage.getId(), update, owner))
+                .isInstanceOf(ApiException.class);
+        verify(garageRepository, never()).save(any());
     }
 
     @Test
@@ -262,6 +300,8 @@ class GarageServiceUnitTest {
         GarageResponse response = garageService.changeStatus(garage.getId(), GarageStatus.INACTIVE, owner);
 
         assertThat(response.status()).isEqualTo(GarageStatus.INACTIVE);
+        assertThat(response.availability()).isEqualTo(GarageAvailability.CLOSED);
+        verify(eventPublisher).publishEvent(any(GarageAvailabilityChangedEvent.class));
     }
 
     @Test
@@ -298,7 +338,7 @@ class GarageServiceUnitTest {
         assertThatThrownBy(() -> garageService.delete(garage.getId(), stranger))
                 .isInstanceOf(AccessDeniedException.class);
 
-        verify(garageRepository, never()).delete(any());
+        verify(garageRepository, never()).delete(any(Garage.class));
     }
 
     // ---------- listados y búsqueda ----------
@@ -350,6 +390,87 @@ class GarageServiceUnitTest {
 
         assertThat(result).hasSize(1);
         verify(garageRepository).findNearby(4.710989, -74.072092, 5.0);
+    }
+
+    // ---------- ramas adicionales de update / create ----------
+
+    @Test
+    void update_WithAllFields_ShouldApplyThemTrimmed_AndSwitchTo24Hours() {
+        UserAccount owner = user("owner20@example.com");
+        Garage garage = garage(owner, 5, 5, false, GarageStatus.ACTIVE);
+        when(garageRepository.findById(garage.getId())).thenReturn(Optional.of(garage));
+
+        GarageUpdateRequest update = new GarageUpdateRequest(
+                "  Nuevo  ", "", " 3009998877 ", " Calle 1 # 2-3 ", " Cali ", " Valle ", " Colombia ", " 760001 ",
+                3.4516, -76.5320, null, null, BigDecimal.valueOf(2800), true, null, null
+        );
+
+        GarageResponse updated = garageService.update(garage.getId(), update, owner);
+
+        assertThat(updated.name()).isEqualTo("Nuevo");
+        assertThat(updated.description()).isNull();
+        assertThat(updated.phone()).isEqualTo("3009998877");
+        assertThat(updated.addressLine()).isEqualTo("Calle 1 # 2-3");
+        assertThat(updated.city()).isEqualTo("Cali");
+        assertThat(updated.state()).isEqualTo("Valle");
+        assertThat(updated.country()).isEqualTo("Colombia");
+        assertThat(updated.postalCode()).isEqualTo("760001");
+        assertThat(updated.latitude()).isEqualTo(3.4516);
+        assertThat(updated.longitude()).isEqualTo(-76.5320);
+        assertThat(updated.open24Hours()).isTrue();
+        assertThat(updated.openingTime()).isNull();
+    }
+
+    @Test
+    void update_WithOnlyOpeningTime_ShouldKeepCurrentClosingTime() {
+        UserAccount owner = user("owner21@example.com");
+        Garage garage = garage(owner, 5, 5, false, GarageStatus.ACTIVE); // 08:00 - 20:00
+        when(garageRepository.findById(garage.getId())).thenReturn(Optional.of(garage));
+
+        GarageUpdateRequest update = new GarageUpdateRequest(null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, LocalTime.of(9, 0), null);
+
+        GarageResponse updated = garageService.update(garage.getId(), update, owner);
+
+        assertThat(updated.openingTime()).isEqualTo(LocalTime.of(9, 0));
+        assertThat(updated.closingTime()).isEqualTo(LocalTime.of(20, 0));
+    }
+
+    @Test
+    void update_WithSameTotalSpots_ShouldNotResizeNorPublishAvailability() {
+        UserAccount owner = user("owner22@example.com");
+        Garage garage = garage(owner, 5, 5, true, GarageStatus.ACTIVE);
+        when(garageRepository.findById(garage.getId())).thenReturn(Optional.of(garage));
+
+        GarageUpdateRequest update = new GarageUpdateRequest(null, null, null, null, null, null, null, null,
+                null, null, 5, null, null, null, null, null);
+
+        garageService.update(garage.getId(), update, owner);
+
+        verify(eventPublisher, never()).publishEvent(any());
+        verify(spotRepository, never()).save(any());
+    }
+
+    @Test
+    void create_WithEqualOpeningAndClosing_ShouldThrow() {
+        UserAccount owner = user("owner23@example.com");
+
+        assertThatThrownBy(() -> garageService.create(validRequest(false, LocalTime.NOON, LocalTime.NOON), owner))
+                .isInstanceOf(ApiException.class);
+        verify(garageRepository, never()).save(any());
+    }
+
+    @Test
+    void create_ShouldStoreBlankOptionalFieldsAsNull() {
+        UserAccount owner = user("owner24@example.com");
+        GarageRequest request = new GarageRequest("Garaje", "   ", null, "Cra 7 # 1-01", "Bogotá", "Cundinamarca",
+                "Colombia", " ", 4.71, -74.07, 2, BigDecimal.ONE, true, null, null);
+
+        GarageResponse response = garageService.create(request, owner);
+
+        assertThat(response.description()).isNull();
+        assertThat(response.phone()).isNull();
+        assertThat(response.postalCode()).isNull();
     }
 
     // ---------- helpers ----------

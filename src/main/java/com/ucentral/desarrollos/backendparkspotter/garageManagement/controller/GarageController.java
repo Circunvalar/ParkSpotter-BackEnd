@@ -7,6 +7,9 @@ import com.ucentral.desarrollos.backendparkspotter.garageManagement.dto.GarageUp
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.GarageStatus;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.service.GarageService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -38,7 +41,7 @@ public class GarageController {
     }
 
     @GetMapping
-    public ResponseEntity<List<GarageResponse>> listActive(@RequestParam(required = false) String city) {
+    public ResponseEntity<List<GarageResponse>> listActive(@RequestParam(required = false) @Size(max = 100) String city) {
         if (city != null && !city.isBlank()) {
             return ResponseEntity.ok(garageService.listByCity(city));
         }
@@ -46,9 +49,11 @@ public class GarageController {
     }
 
     @GetMapping("/nearby")
-    public ResponseEntity<List<GarageResponse>> nearby(@RequestParam double lat,
-                                                         @RequestParam double lng,
-                                                         @RequestParam(defaultValue = "5") double radiusKm) {
+    public ResponseEntity<List<GarageResponse>> nearby(@RequestParam @DecimalMin("-90.0") @DecimalMax("90.0") double lat,
+                                                         @RequestParam @DecimalMin("-180.0") @DecimalMax("180.0") double lng,
+                                                         @RequestParam(defaultValue = "5")
+                                                         @DecimalMin(value = "0.0", inclusive = false) @DecimalMax("50.0")
+                                                         double radiusKm) {
         return ResponseEntity.ok(garageService.findNearby(lat, lng, radiusKm));
     }
 

@@ -2,6 +2,7 @@ package com.ucentral.desarrollos.backendparkspotter.auth.security;
 
 import com.ucentral.desarrollos.backendparkspotter.auth.entity.UserAccount;
 import com.ucentral.desarrollos.backendparkspotter.auth.repository.UserRepository;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,7 +30,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String header = request.getHeader("Authorization");
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7);
-            if (jwtService.isValidAccessToken(token)) {
+            if (isValidAccessToken(token)) {
                 String userId = jwtService.parseClaims(token).getSubject();
                 UserAccount user = userRepository.findById(java.util.UUID.fromString(userId)).orElse(null);
                 if (user != null && user.isEnabled()) {
@@ -44,5 +45,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         }
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * Un token vencido o mal formado no debe romper la petición: se sigue como anónimo,
+     * así los endpoints públicos funcionan y los protegidos responden 401.
+     */
+    private boolean isValidAccessToken(String token) {
+        try {
+            return jwtService.isValidAccessToken(token);
+        } catch (JwtException | IllegalArgumentException ex) {
+            return false;
+        }
     }
 }

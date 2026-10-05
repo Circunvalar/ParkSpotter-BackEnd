@@ -18,7 +18,9 @@ public class CorsConfig {
         configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowCredentials(false);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-Id"));
+        // X-Client-Id lo usa el login; Last-Event-ID lo envía EventSource al reconectarse al stream SSE.
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-Request-Id", "X-Client-Id", "Last-Event-ID", "Cache-Control"));
+        configuration.setMaxAge(3600L);
         configuration.setExposedHeaders(List.of("Authorization", "X-Request-Id"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

@@ -9,9 +9,11 @@ import com.ucentral.desarrollos.backendparkspotter.auth.dto.UserResponse;
 import com.ucentral.desarrollos.backendparkspotter.auth.dto.TokenPairResponse;
 import com.ucentral.desarrollos.backendparkspotter.auth.entity.UserAccount;
 import com.ucentral.desarrollos.backendparkspotter.auth.service.AuthService;
+import com.ucentral.desarrollos.backendparkspotter.shared.validation.ValidationPatterns;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,7 +38,10 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<TokenPairResponse> login(@Valid @RequestBody LoginRequest request,
-                                              @RequestHeader(value = "X-Client-Id", defaultValue = "browser") String clientId) {
+                                                   @RequestHeader(value = "X-Client-Id", defaultValue = "browser")
+                                                   @Size(min = 1, max = 64)
+                                                   @Pattern(regexp = ValidationPatterns.CLIENT_ID, message = "solo letras, números, punto, guion y guion bajo")
+                                                   String clientId) {
         return ResponseEntity.ok(authService.login(request, clientId));
     }
 
