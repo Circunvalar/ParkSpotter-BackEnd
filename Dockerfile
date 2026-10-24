@@ -14,8 +14,8 @@ RUN ./mvnw -B -q -DskipTests package && cp target/BackendParkSpotter-*.jar app.j
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-RUN groupadd --system spring && useradd --system --gid spring --home /app spring \
-    && apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+# La imagen base ya trae curl (lo usa el HEALTHCHECK).
+RUN groupadd --system spring && useradd --system --gid spring --home /app spring
 COPY --from=build /app/app.jar app.jar
 USER spring
 EXPOSE 8080

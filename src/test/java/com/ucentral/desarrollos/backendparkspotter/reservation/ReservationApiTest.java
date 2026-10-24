@@ -473,6 +473,8 @@ class ReservationApiTest extends ApiTestSupport {
         assertThat(held.getSpot().getId()).isNotEqualTo(assigned);
         assertThat(spotRepository.findById(held.getSpot().getId()).orElseThrow().getStatus()).isEqualTo(SpotStatus.RESERVED);
         assertThat(reservationService.hold(UUID.fromString(id))).isFalse();
+        perform(get("/api/v1/notifications"), driver)
+                .andExpect(jsonPath("$.content[0].type").value("RESERVATION_REMINDER"));
     }
 
     @Test

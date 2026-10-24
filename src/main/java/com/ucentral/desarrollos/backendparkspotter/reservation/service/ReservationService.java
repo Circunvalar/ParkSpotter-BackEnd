@@ -365,6 +365,9 @@ public class ReservationService {
             reservation.setSpot(spot);
         }
         holdSpot(reservation, garage, spot);
+        if (reservation.getStatus() == ReservationStatus.CONFIRMED) {
+            notifier.reminder(reservation);
+        }
         return true;
     }
 

@@ -57,6 +57,14 @@ public class ReservationNotifier {
                 r.getId(), false);
     }
 
+    /** Al apartar la plaza (por defecto 30 minutos antes del inicio). */
+    public void reminder(Reservation r) {
+        notificationService.notify(r.getDriver(), NotificationType.RESERVATION_REMINDER, "Tu reserva empieza pronto",
+                "Tu reserva " + r.getCode() + " en " + r.getGarage().getName() + " empieza a las " + time(r.getStartTime())
+                        + (r.getSpot() == null ? "." : ". Plaza " + r.getSpot().getCode() + "."),
+                r.getId(), false);
+    }
+
     public void checkedIn(Reservation r) {
         notificationService.notify(r.getDriver(), NotificationType.CHECK_IN, "Entrada registrada",
                 "Bienvenido a " + r.getGarage().getName() + ". Tu reserva termina a las " + time(r.getEndTime()) + ".",
