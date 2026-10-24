@@ -1,14 +1,17 @@
 package com.ucentral.desarrollos.backendparkspotter.auth.controller;
 
 import com.ucentral.desarrollos.backendparkspotter.auth.dto.ChangePasswordRequest;
+import com.ucentral.desarrollos.backendparkspotter.auth.dto.ForgotPasswordRequest;
 import com.ucentral.desarrollos.backendparkspotter.auth.dto.LoginRequest;
 import com.ucentral.desarrollos.backendparkspotter.auth.dto.LogoutRequest;
 import com.ucentral.desarrollos.backendparkspotter.auth.dto.RefreshRequest;
 import com.ucentral.desarrollos.backendparkspotter.auth.dto.RegisterRequest;
+import com.ucentral.desarrollos.backendparkspotter.auth.dto.ResetPasswordRequest;
 import com.ucentral.desarrollos.backendparkspotter.auth.dto.UserResponse;
 import com.ucentral.desarrollos.backendparkspotter.auth.dto.TokenPairResponse;
 import com.ucentral.desarrollos.backendparkspotter.auth.entity.UserAccount;
 import com.ucentral.desarrollos.backendparkspotter.auth.service.AuthService;
+import com.ucentral.desarrollos.backendparkspotter.auth.service.PasswordResetService;
 import com.ucentral.desarrollos.backendparkspotter.shared.validation.ValidationPatterns;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
@@ -30,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final PasswordResetService passwordResetService;
 
     @PostMapping("/register")
     public ResponseEntity<TokenPairResponse> register(@Valid @RequestBody RegisterRequest request) {
@@ -53,6 +57,19 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(@Valid @RequestBody LogoutRequest request) {
         authService.logout(request);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Siempre 202, exista o no el correo (no se revela qué correos están registrados). */
+    @PostMapping("/password/forgot")
+    public ResponseEntity<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        passwordResetService.requestReset(request.email());
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/password/reset")
+    public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        passwordResetService.resetPassword(request.token(), request.newPassword());
         return ResponseEntity.noContent().build();
     }
 

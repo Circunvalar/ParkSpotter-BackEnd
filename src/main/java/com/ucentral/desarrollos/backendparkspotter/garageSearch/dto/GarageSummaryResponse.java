@@ -27,6 +27,9 @@ public record GarageSummaryResponse(
         LocalTime openingTime,
         LocalTime closingTime,
         boolean openNow,
-        Double distanceKm
+        Double distanceKm,
+        boolean verified,
+        double averageRating,
+        int ratingCount
 ) {
 }

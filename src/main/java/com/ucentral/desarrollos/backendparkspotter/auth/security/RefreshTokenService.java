@@ -55,6 +55,12 @@ public class RefreshTokenService {
         });
     }
 
+    /** Revoca todas las sesiones abiertas del usuario. */
+    @Transactional
+    public void revokeAllForUser(UserAccount user) {
+        refreshTokenRepository.revokeAllForUser(user.getId());
+    }
+
     public Optional<RefreshToken> findValidToken(String rawToken) {
         String tokenHash = hash(rawToken);
         return refreshTokenRepository.findByTokenHash(tokenHash)

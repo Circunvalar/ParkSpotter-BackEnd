@@ -1,0 +1,9 @@
+# Caddy obtiene y renueva solo el certificado HTTPS de Let's Encrypt para el dominio de .env (DOMAIN).
+# Sin dominio propio sirve uno gratuito tipo <ip-con-guiones>.sslip.io o un subdominio de duckdns.org.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy api:8080 {
+		# Los streams SSE (tiempo real) no deben quedar en buffer.
+		flush_interval -1
+	}
+}

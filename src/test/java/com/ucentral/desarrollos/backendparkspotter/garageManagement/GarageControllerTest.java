@@ -51,6 +51,8 @@ class GarageControllerTest {
         userRepository.deleteAll();
         roleRepository.deleteAll();
         roleRepository.save(role("ROLE_USER"));
+        roleRepository.save(role("ROLE_OWNER"));
+        roleRepository.save(role("ROLE_DRIVER"));
     }
 
     @Test
@@ -65,6 +67,18 @@ class GarageControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(validRequest())))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void createByDriverWithoutOwnerRoleShouldBeForbidden() throws Exception {
+        UserAccount driver = driver("solo-conductor@example.com");
+
+        mockMvc.perform(post("/api/v1/garages")
+                        .header("Authorization", "Bearer " + tokenFor(driver))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validRequest())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
     }
 
     @Test
@@ -172,6 +186,16 @@ class GarageControllerTest {
         user.setPasswordHash(passwordEncoder.encode("Password123!"));
         user.setEnabled(true);
         user.getRoles().add(roleRepository.findByName("ROLE_USER").orElseThrow());
+        user.getRoles().add(roleRepository.findByName("ROLE_OWNER").orElseThrow());
+        return userRepository.save(user);
+    }
+
+    private UserAccount driver(String email) {
+        UserAccount user = new UserAccount();
+        user.setEmail(email);
+        user.setPasswordHash(passwordEncoder.encode("Password123!"));
+        user.getRoles().add(roleRepository.findByName("ROLE_USER").orElseThrow());
+        user.getRoles().add(roleRepository.findByName("ROLE_DRIVER").orElseThrow());
         return userRepository.save(user);
     }
 

@@ -44,7 +44,12 @@ public class SecurityConfig {
                 .requestMatchers("/error").permitAll()
                 // logout es público: basta el refresh token que se revoca (si el access token ya venció,
                 // exigirlo dejaría el refresh token vivo).
-                .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
+                .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout",
+                        "/api/v1/auth/password/forgot", "/api/v1/auth/password/reset").permitAll()
+                // Documentación Swagger / OpenAPI (T4-01).
+                .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**").permitAll()
+                // Webhook de la pasarela: no lleva JWT, se autentica con la firma del evento.
+                .requestMatchers(HttpMethod.POST, "/api/v1/payments/webhooks/**").permitAll()
                 // "mine" debe ir antes del patrón público /{id} para seguir exigiendo token.
                 .requestMatchers(HttpMethod.GET, "/api/v1/garages/mine").authenticated()
                 // Consulta pública de garajes: búsqueda, mapa, detalle, plazas y tiempo real.
@@ -58,7 +63,11 @@ public class SecurityConfig {
                         "/api/v1/garages/{id}/detail",
                         "/api/v1/garages/{id}/availability",
                         "/api/v1/garages/{id}/availability/stream",
-                        "/api/v1/garages/{id}/spots").permitAll()
+                        "/api/v1/garages/{id}/spots",
+                        "/api/v1/garages/{id}/photos",
+                        "/api/v1/garages/{id}/photos/{photoId}",
+                        "/api/v1/garages/{id}/reviews",
+                        "/api/v1/garages/{id}/reservation-quote").permitAll()
                 .anyRequest().authenticated());
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();

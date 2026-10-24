@@ -9,5 +9,7 @@ public enum GarageSortOption {
     AVAILABILITY,
     /** Orden alfabético. Es el orden por defecto sin coordenadas. */
     NAME,
-    NEWEST
+    NEWEST,
+    /** Mejor calificados primero (a igual promedio, el que tiene más calificaciones). */
+    RATING
 }

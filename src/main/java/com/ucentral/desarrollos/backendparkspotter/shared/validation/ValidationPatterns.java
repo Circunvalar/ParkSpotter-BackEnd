@@ -23,6 +23,15 @@ public final class ValidationPatterns {
      */
     public static final String PLACE_NAME = "^\\s*\\p{L}[\\p{L} .'-]*$";
 
+    /** Nombre de persona: letras (con tildes y ñ), espacios, puntos, apóstrofes y guiones. */
+    public static final String PERSON_NAME = "^\\s*\\p{L}[\\p{L} .'-]*$";
+
+    /** Placa de vehículo: letras, números, espacios y guiones (ej. ABC123, ABC-12D). 4 a 10 caracteres. */
+    public static final String PLATE = "^[A-Za-z0-9 -]{4,10}$";
+
+    /** Código de reserva que muestra el conductor en la entrada (ej. PS-7K3M9Q). */
+    public static final String RESERVATION_CODE = "^\\s*[A-Za-z0-9-]{4,20}\\s*$";
+
     /** Código postal: letras, números, espacios o guiones. 3 a 10 caracteres. */
     public static final String POSTAL_CODE = "^[A-Za-z0-9 -]{3,10}$";
 

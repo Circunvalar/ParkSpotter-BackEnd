@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -64,6 +65,20 @@ public class ParkingSpotService {
             removeFreeSpots(garage, -difference);
         }
         recalculateCounters(garage);
+    }
+
+    /**
+     * Cambio de estado de una plaza originado por una reserva (reservar, entrada, salida, cancelación).
+     * El garaje debe venir bloqueado (findByIdForUpdate) por quien llama.
+     */
+    public void applyReservationStatus(Garage garage, ParkingSpot spot, SpotStatus status) {
+        if (spot.getStatus() == status) {
+            return;
+        }
+        spot.setStatus(status);
+        recalculateCounters(garage);
+        garageRepository.save(garage);
+        publishAvailability(garage);
     }
 
     public void publishAvailability(Garage garage) {
@@ -148,6 +163,9 @@ public class ParkingSpotService {
         if (spot.getStatus() == SpotStatus.OCCUPIED || spot.getStatus() == SpotStatus.RESERVED) {
             throw new ApiException("No se puede eliminar una plaza ocupada o reservada");
         }
+        if (spotRepository.findSpotIdsWithActiveReservations(garageId).contains(spotId)) {
+            throw new ApiException("No se puede eliminar una plaza con reservas activas");
+        }
         if (garage.getSpots().size() <= 1) {
             throw new ApiException("Un garaje debe tener al menos una plaza");
         }
@@ -204,15 +222,19 @@ public class ParkingSpotService {
     }
 
     private void removeFreeSpots(Garage garage, int count) {
+        Set<UUID> withReservations = garage.getId() == null
+                ? new HashSet<>()
+                : new HashSet<>(spotRepository.findSpotIdsWithActiveReservations(garage.getId()));
         List<ParkingSpot> removable = garage.getSpots().stream()
                 .filter(spot -> spot.getStatus() == SpotStatus.OUT_OF_SERVICE || spot.getStatus() == SpotStatus.AVAILABLE)
+                .filter(spot -> !withReservations.contains(spot.getId()))
                 // Primero las fuera de servicio y, dentro de cada grupo, las de código más alto.
                 .sorted(Comparator.comparing((ParkingSpot spot) -> spot.getStatus() != SpotStatus.OUT_OF_SERVICE)
                         .thenComparing(ParkingSpot::getCode, Comparator.reverseOrder()))
                 .limit(count)
                 .toList();
         if (removable.size() < count) {
-            throw new ApiException("No se puede reducir la capacidad: hay plazas ocupadas o reservadas");
+            throw new ApiException("No se puede reducir la capacidad: hay plazas ocupadas, reservadas o con reservas activas");
         }
         garage.getSpots().removeAll(removable);
     }

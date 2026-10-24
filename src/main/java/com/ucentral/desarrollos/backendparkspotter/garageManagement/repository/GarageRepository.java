@@ -2,7 +2,10 @@ package com.ucentral.desarrollos.backendparkspotter.garageManagement.repository;
 
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.Garage;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.GarageStatus;
+import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.VerificationStatus;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
@@ -28,6 +31,22 @@ public interface GarageRepository extends JpaRepository<Garage, UUID>, JpaSpecif
     List<Garage> findGaragesWithoutSpots();
 
     List<Garage> findByStatus(GarageStatus status);
+
+    /** Reservas que todavía ocupan o van a ocupar una plaza: impiden borrar el garaje. */
+    @Query("""
+            SELECT COUNT(r) > 0 FROM Reservation r
+            WHERE r.garage.id = :id
+              AND r.status IN (com.ucentral.desarrollos.backendparkspotter.reservation.entity.ReservationStatus.PENDING_PAYMENT,
+                               com.ucentral.desarrollos.backendparkspotter.reservation.entity.ReservationStatus.CONFIRMED,
+                               com.ucentral.desarrollos.backendparkspotter.reservation.entity.ReservationStatus.CHECKED_IN)
+            """)
+    boolean hasActiveReservations(@Param("id") UUID id);
+
+    Page<Garage> findByVerificationStatus(VerificationStatus verificationStatus, Pageable pageable);
+
+    long countByStatus(GarageStatus status);
+
+    long countByVerificationStatus(VerificationStatus verificationStatus);
 
     List<Garage> findByOwnerId(UUID ownerId);
 

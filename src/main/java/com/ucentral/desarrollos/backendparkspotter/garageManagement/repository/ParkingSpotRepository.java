@@ -32,6 +32,16 @@ public interface ParkingSpotRepository extends JpaRepository<ParkingSpot, UUID> 
                                            @Param("status") SpotStatus status,
                                            @Param("vehicleType") VehicleType vehicleType);
 
+    /** Plazas con reservas activas (pendientes de pago, confirmadas o en curso): no se pueden eliminar. */
+    @Query("""
+            SELECT DISTINCT r.spot.id FROM Reservation r
+            WHERE r.garage.id = :garageId
+              AND r.status IN (com.ucentral.desarrollos.backendparkspotter.reservation.entity.ReservationStatus.PENDING_PAYMENT,
+                               com.ucentral.desarrollos.backendparkspotter.reservation.entity.ReservationStatus.CONFIRMED,
+                               com.ucentral.desarrollos.backendparkspotter.reservation.entity.ReservationStatus.CHECKED_IN)
+            """)
+    List<UUID> findSpotIdsWithActiveReservations(@Param("garageId") UUID garageId);
+
     @Query("SELECT DISTINCT s.floor FROM ParkingSpot s WHERE s.garage.id = :garageId ORDER BY s.floor")
     List<Integer> findFloorsByGarageId(@Param("garageId") UUID garageId);
 

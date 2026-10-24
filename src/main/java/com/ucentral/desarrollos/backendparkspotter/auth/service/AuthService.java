@@ -7,8 +7,10 @@ import com.ucentral.desarrollos.backendparkspotter.auth.dto.LogoutRequest;
 import com.ucentral.desarrollos.backendparkspotter.auth.dto.RegisterRequest;
 import com.ucentral.desarrollos.backendparkspotter.auth.dto.RefreshRequest;
 import com.ucentral.desarrollos.backendparkspotter.auth.dto.UserResponse;
+import com.ucentral.desarrollos.backendparkspotter.auth.entity.AccountType;
 import com.ucentral.desarrollos.backendparkspotter.auth.entity.LoginAudit;
 import com.ucentral.desarrollos.backendparkspotter.auth.entity.Role;
+import com.ucentral.desarrollos.backendparkspotter.auth.entity.RoleNames;
 import com.ucentral.desarrollos.backendparkspotter.auth.entity.UserAccount;
 import com.ucentral.desarrollos.backendparkspotter.auth.repository.RoleRepository;
 import com.ucentral.desarrollos.backendparkspotter.auth.repository.LoginAuditRepository;
@@ -24,8 +26,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -55,21 +59,17 @@ public class AuthService {
         if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new ConflictException("El correo ya está registrado");
         }
-        Role role = roleRepository.findByName("ROLE_USER")
-                .orElseGet(() -> {
-                    Role created = new Role();
-                    created.setName("ROLE_USER");
-                    return roleRepository.save(created);
-                });
+        AccountType accountType = request.role() == null ? AccountType.DRIVER : request.role();
         UserAccount user = new UserAccount();
         user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
-        user.getRoles().add(role);
+        user.setFullName(cleanOptional(request.fullName()));
+        user.setPhone(cleanOptional(request.phone()));
+        user.getRoles().add(Roles.findOrCreate(roleRepository, RoleNames.USER));
+        user.getRoles().add(Roles.findOrCreate(roleRepository, accountType.roleName()));
         UserAccount saved = userRepository.save(user);
         audit(email, "REGISTER", "unknown", "unknown", "unknown");
-        String accessToken = jwtService.generateAccessToken(saved.getId(), saved.getEmail(), saved.getRoles().stream().map(Role::getName).toList());
-        String refreshToken = refreshTokenService.createRefreshToken(saved);
-        return new TokenPairResponse(saved.getId(), saved.getEmail(), accessToken, refreshToken, "Bearer", jwtService.accessTokenSeconds());
+        return tokenPair(saved, refreshTokenService.createRefreshToken(saved));
     }
 
     @Transactional
@@ -91,15 +91,12 @@ public class AuthService {
         }
         rateLimitService.recordSuccess(clientKey + ":" + email);
         audit(email, "LOGIN_SUCCESS", clientKey, "unknown", "unknown");
-        String accessToken = jwtService.generateAccessToken(user.getId(), user.getEmail(), user.getRoles().stream().map(Role::getName).toList());
-        String refreshToken = refreshTokenService.createRefreshToken(user);
-        return new TokenPairResponse(user.getId(), user.getEmail(), accessToken, refreshToken, "Bearer", jwtService.accessTokenSeconds());
+        return tokenPair(user, refreshTokenService.createRefreshToken(user));
     }
 
     @Transactional(readOnly = true)
     public UserResponse me(UserAccount user) {
-        Set<String> roles = user.getRoles().stream().map(Role::getName).collect(Collectors.toSet());
-        return new UserResponse(user.getId(), user.getEmail(), roles, user.isEnabled());
+        return toUserResponse(user);
     }
 
     @Transactional
@@ -112,9 +109,7 @@ public class AuthService {
         if (!user.isEnabled()) {
             throw new UnauthorizedException("Refresh token inválido o vencido");
         }
-        String accessToken = jwtService.generateAccessToken(user.getId(), user.getEmail(), user.getRoles().stream().map(Role::getName).toList());
-        String rotatedRefreshToken = service.rotate(rawToken, user);
-        return new TokenPairResponse(user.getId(), user.getEmail(), accessToken, rotatedRefreshToken, "Bearer", jwtService.accessTokenSeconds());
+        return tokenPair(user, service.rotate(rawToken, user));
     }
 
     @Transactional
@@ -130,6 +125,28 @@ public class AuthService {
     @Transactional
     public void logout(LogoutRequest request) {
         refreshTokenService.revoke(request.refreshToken());
+    }
+
+    /** Respuesta de login/registro/refresh: access token con los roles actuales y el refresh token. */
+    public TokenPairResponse tokenPair(UserAccount user, String refreshToken) {
+        List<String> roles = user.getRoles().stream().map(Role::getName).sorted().toList();
+        String accessToken = jwtService.generateAccessToken(user.getId(), user.getEmail(), roles);
+        return new TokenPairResponse(user.getId(), user.getEmail(), accessToken, refreshToken, "Bearer",
+                jwtService.accessTokenSeconds(), roles);
+    }
+
+    public static UserResponse toUserResponse(UserAccount user) {
+        Set<String> roles = user.getRoles().stream().map(Role::getName).collect(Collectors.toCollection(TreeSet::new));
+        return new UserResponse(user.getId(), user.getEmail(), user.getFullName(), user.getPhone(), roles,
+                user.isEnabled(), user.getCreatedAt());
+    }
+
+    private static String cleanOptional(String value) {
+        if (value == null) {
+            return null;
+        }
+        String cleaned = value.strip();
+        return cleaned.isEmpty() ? null : cleaned;
     }
 
     private String dummyHash() {
