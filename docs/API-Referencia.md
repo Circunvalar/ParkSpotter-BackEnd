@@ -94,7 +94,7 @@ Base: `/api/v1/auth`. Todos son públicos salvo `/me` y `/password` (PATCH).
 Crea la cuenta y devuelve la sesión (201).
 
 ```json
-{ "email": "ana@correo.com", "password": "ClaveSegura123", "role": "DRIVER", "fullName": "Ana Pérez", "phone": "3001234567" }
+{ "email": "ana@correo.com", "password": "<contraseña>", "role": "DRIVER", "fullName": "Ana Pérez", "phone": "3001234567" }
 ```
 
 - `role`: `DRIVER` (por defecto) u `OWNER`. `fullName` y `phone` son opcionales.
