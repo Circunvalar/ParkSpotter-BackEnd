@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.greaterThan;
@@ -49,7 +50,11 @@ class ReportApiTest extends ApiTestSupport {
         withSearch.setSearchToReservationSeconds(90);
         reservationRepository.save(withSearch);
 
-        perform(get("/api/v1/reports/owner"), owner)
+        // La reserva cancelada empieza en 2 h: después de las 22:00 de Bogotá cae en el día siguiente,
+        // así que el rango termina mañana (con el rango por defecto, que termina hoy, quedaría fuera).
+        LocalDate to = LocalDate.now(ZoneId.of("America/Bogota")).plusDays(1);
+        String from = to.minusDays(29).toString();
+        perform(get("/api/v1/reports/owner").param("from", from).param("to", to.toString()), owner)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.summary.totalReservations").value(2))
                 .andExpect(jsonPath("$.summary.paidReservations").value(1))
@@ -66,7 +71,7 @@ class ReportApiTest extends ApiTestSupport {
                 .andExpect(jsonPath("$.summary.totalReservations").value(0))
                 .andExpect(jsonPath("$.garages", hasSize(1)));
 
-        perform(get("/api/v1/reports/admin"), admin)
+        perform(get("/api/v1/reports/admin").param("from", from).param("to", to.toString()), admin)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.users.total").value(3))
                 .andExpect(jsonPath("$.users.drivers").value(1))

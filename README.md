@@ -13,10 +13,14 @@ API REST de ParkSpotter (Universidad Central) para encontrar y gestionar parquea
 ```
 Por defecto escucha en `http://localhost:8080`. La base de datos es Azure SQL (`parkspotter.database.windows.net`, base `ParkSpotterDatabase`). Antes de arrancar hay que definir la variable de entorno `DB_PASSWORD` con la contraseña de la base; nunca se escribe en `application.properties`. Opcionalmente `DB_URL` y `DB_USERNAME` cambian el servidor y el usuario.
 
+Lo más cómodo es un archivo `.env` en la raíz del repositorio (no se sube a git):
+
 ```bash
-export DB_PASSWORD='la-contraseña'          # PowerShell: $env:DB_PASSWORD='la-contraseña'
+cp .env.example .env       # completar DB_PASSWORD y JWT_SECRET
 ./mvnw spring-boot:run
 ```
+
+También sirve definir la variable en la terminal: `export DB_PASSWORD='la-contraseña'` (PowerShell: `$env:DB_PASSWORD='la-contraseña'`).
 En IntelliJ: *Run → Edit Configurations → Environment variables* → `DB_PASSWORD=...`. Documentación interactiva en `http://localhost:8080/swagger-ui.html`.
 
 Con Docker (la misma imagen que corre en Azure; la base sigue siendo Azure SQL):
