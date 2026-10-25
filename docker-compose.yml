@@ -1,0 +1,20 @@
+# Backend en Docker para desarrollo local o pruebas. La base de datos es Azure SQL (externa), no un contenedor.
+# En producción la misma imagen corre en Azure App Service, que da el HTTPS (ver docs/Despliegue-Azure.md);
+# allí las variables van en Application settings y no se usa este archivo. Uso local:
+#   cp .env.example .env   # y completar los valores (DB_PASSWORD es obligatoria)
+#   docker compose up -d --build
+#   -> API en http://localhost:8080 (Swagger: /swagger-ui.html)
+# Para conectarse a Azure SQL desde esta computadora, su IP debe estar en el firewall del servidor SQL.
+
+services:
+  api:
+    build: .
+    image: parkspotter-backend:latest
+    restart: unless-stopped
+    # DB_PASSWORD (y opcionalmente DB_URL / DB_USERNAME) llegan desde .env
+    env_file: .env
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en .env}
+      APP_BOOTSTRAP_ROLES: "true"
+    ports:
+      - "8080:8080"
