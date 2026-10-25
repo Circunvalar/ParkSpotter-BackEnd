@@ -2,7 +2,8 @@
 
 Guía para quien implemente los fronts **web** y **Android**. Cada endpoint indica método, ruta, autenticación, cuerpo, respuesta y errores.
 
-- **Base:** `https://<tu-servidor>` (local: `http://localhost:8080`; emulador Android: `http://10.0.2.2:8080`).
+- **Base:** `https://<API_HOST>`, el servidor en Azure App Service (por ejemplo `https://parkspotter-api.azurewebsites.net`; local: `http://localhost:8080`; emulador Android: `http://10.0.2.2:8080`). En producción solo HTTPS.
+- **Conexión de los fronts** (URL base por entorno, CORS, headers, requisitos de web y Android): [Conexion-Web-y-Movil.md](Conexion-Web-y-Movil.md). Despliegue del servidor: [Despliegue-Azure.md](Despliegue-Azure.md).
 - **Swagger UI** (probar en el navegador): `/swagger-ui.html`. Contrato OpenAPI en JSON: `/v3/api-docs`.
 - **Clientes listos para copiar:** [clients/web](../clients/web/README.md) (TypeScript) y [clients/android](../clients/android/README.md) (Kotlin + Retrofit).
 - La búsqueda, el mapa y el tiempo real están explicados con más detalle en [API-Sprint-03-Busqueda-Garajes.md](API-Sprint-03-Busqueda-Garajes.md).
@@ -81,7 +82,7 @@ Una cuenta tiene siempre `ROLE_USER` y además uno o varios de estos roles:
 
 - Al registrarse se elige `DRIVER` (por defecto) u `OWNER`. Después se puede activar el otro con `POST /api/v1/users/me/roles`.
 - Los roles llegan en `roles` del login y de `/users/me`. Úsenlos para mostrar u ocultar menús. El backend vuelve a comprobarlos en cada llamada.
-- El primer administrador se configura con la variable `ADMIN_EMAIL` (ver la guía de despliegue).
+- El primer administrador se configura con la variable `ADMIN_EMAIL` (ver la [guía de despliegue](Despliegue-Azure.md#9-crear-la-cuenta-administradora)).
 
 ---
 

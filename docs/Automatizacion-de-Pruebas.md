@@ -93,6 +93,10 @@ En Windows estos scripts funcionan en **Git Bash**.
 | Mismo paso, pero dice `coverage checks have not been met` | Se agregó código sin pruebas. Ver qué falta en `jacoco/index.html` (artefacto `reportes-pruebas`). |
 | "Levantar la API y ejecutar el smoke test" | La salida indica qué verificación falló. Descargar `log-api-e2e` para ver el error de la API. |
 
+## Despliegue después de la CI
+
+Cuando la CI termina bien en `master`, el workflow [`deploy-azure.yml`](../.github/workflows/deploy-azure.yml) publica la imagen Docker en GitHub Container Registry y, si está configurado, actualiza la app en Azure App Service. Si la CI falla, no se despliega nada. Detalles en [Despliegue-Azure.md](Despliegue-Azure.md#11-despliegue-automático-desde-github-opcional).
+
 ## Herramientas gratuitas opcionales para más adelante
 
 | Herramienta | Para qué | Costo |

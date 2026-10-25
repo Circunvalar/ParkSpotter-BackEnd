@@ -2,7 +2,8 @@
 # Imagen del backend de ParkSpotter en dos etapas:
 #   1. build: compila el jar con Maven (las pruebas ya corren en la CI; aquí se omiten para construir rápido).
 #   2. runtime: solo el JRE 21 y el jar, con usuario sin privilegios.
-# Funciona en amd64 y arm64 (las VM Ampere A1 de Oracle Always Free son arm64).
+# Se despliega en Azure App Service para contenedores (linux/amd64; ver docs/Despliegue-Azure.md).
+# Las variables (DB_PASSWORD, JWT_SECRET, ...) llegan en tiempo de ejecución; la imagen no lleva secretos.
 
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /app

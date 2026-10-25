@@ -8,13 +8,16 @@ Un solo archivo, [`parkspotter-api.ts`](parkspotter-api.ts), sin dependencias. S
 2. Definir la URL del backend en el `.env` del front:
 
    ```bash
-   # Vite
+   # Vite: .env.development
    VITE_API_URL=http://localhost:8080
-   # Next.js
-   NEXT_PUBLIC_API_URL=http://localhost:8080
+   # Vite: .env.production (servidor en Azure; usar la URL real de la app)
+   VITE_API_URL=https://parkspotter-api.azurewebsites.net
+   # Next.js: lo mismo con NEXT_PUBLIC_API_URL
    ```
 
-3. Agregar el dominio del front a `APP_CORS_ALLOWED_ORIGINS` en el backend (por ejemplo `http://localhost:3000,https://parkspotter-web.vercel.app`).
+   En producción la URL debe ser HTTPS: un front servido por HTTPS no puede llamar a una API por HTTP.
+
+3. Agregar el dominio del front a `APP_CORS_ALLOWED_ORIGINS` en el backend (Application settings de Azure; por ejemplo `https://parkspotter-web.vercel.app,http://localhost:3000`, sin `/` final). Detalles y requisitos en [docs/Conexion-Web-y-Movil.md](../../docs/Conexion-Web-y-Movil.md).
 
 ## 2. Crear una sola instancia
 
