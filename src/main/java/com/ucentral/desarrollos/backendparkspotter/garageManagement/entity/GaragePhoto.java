@@ -22,7 +22,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Foto de un garaje (Sprint 06, PB-26). Se guarda en la base de datos (bytea en PostgreSQL) para no
+ * Foto de un garaje (Sprint 06, PB-26). Se guarda en la base de datos (varbinary(max) en SQL Server, bytea en PostgreSQL) para no
  * depender de un servicio de archivos externo; el tamaño y la cantidad por garaje están limitados.
  */
 @Getter
@@ -30,6 +30,9 @@ import java.util.UUID;
 @Entity
 @Table(name = "garage_photos", indexes = @Index(name = "idx_garage_photos_garage", columnList = "garage_id"))
 public class GaragePhoto {
+
+    /** Mayor que el límite de subida (5 MB): Hibernate lo crea como varbinary(max) en SQL Server y bytea en PostgreSQL. */
+    static final int MAX_DATA_BYTES = 10 * 1024 * 1024;
 
     @Id
     @GeneratedValue
@@ -48,7 +51,7 @@ public class GaragePhoto {
 
     @Basic(fetch = FetchType.LAZY)
     @JdbcTypeCode(SqlTypes.VARBINARY)
-    @Column(nullable = false, columnDefinition = "bytea")
+    @Column(nullable = false, length = MAX_DATA_BYTES)
     private byte[] data;
 
     @CreationTimestamp

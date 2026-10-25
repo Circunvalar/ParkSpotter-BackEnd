@@ -27,7 +27,7 @@ push / pull request
         │ (solo si todo pasó)
         ▼
 ┌──────────────────────── job: e2e (≈ 2 min) ────────────────────────┐
-│ PostgreSQL 18 en un contenedor temporal                            │
+│ SQL Server 2022 (motor de Azure SQL) en un contenedor temporal     │
 │ Levanta la API real (el mismo jar del job anterior)                │
 │ scripts/smoke-test.sh → 44 verificaciones de punta a punta         │
 │ Si falla, guarda el log de la API                                  │
@@ -38,7 +38,7 @@ Ningún job se conecta a la base de datos de producción: el job `e2e` usa su pr
 
 ## Cómo ver los resultados
 
-- **En el pull request:** aparecen los checks "Pruebas y cobertura" y "Punta a punta con PostgreSQL" en verde o rojo.
+- **En el pull request:** aparecen los checks "Pruebas y cobertura" y "Punta a punta con SQL Server" en verde o rojo.
 - **Pestaña Actions** del repositorio, abriendo la ejecución:
   - Arriba está el **resumen**: pruebas que pasaron o fallaron (con el mensaje de cada falla) y la cobertura por paquete.
   - Abajo, en **Artifacts**:
@@ -55,7 +55,7 @@ Lo debe hacer un administrador del repositorio, una sola vez:
 3. Activar **Require a pull request before merging**.
 4. Activar **Require status checks to pass** y agregar:
    - `Pruebas y cobertura`
-   - `Punta a punta con PostgreSQL`
+   - `Punta a punta con SQL Server`
 5. Guardar.
 
 Desde ese momento, GitHub no deja mergear un pull request con pruebas en rojo.
@@ -68,12 +68,12 @@ python scripts/ci-summary.py
 ```
 El primer comando corre las pruebas y la cobertura (igual que el job `pruebas`); el segundo muestra el mismo resumen que la CI.
 
-Para la prueba de punta a punta (igual que el job `e2e`) se necesita un PostgreSQL de pruebas. **Nunca uses el de producción**:
+Para la prueba de punta a punta (igual que el job `e2e`) se necesita un SQL Server de pruebas (por ejemplo `docker run -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD=... -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest` y luego `CREATE DATABASE parkspotter_test`). **Nunca uses la base de Azure de producción**:
 
 ```bash
 ./mvnw -DskipTests package
-SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/parkspotter_test \
-SPRING_DATASOURCE_USERNAME=postgres SPRING_DATASOURCE_PASSWORD=tu_clave_local \
+SPRING_DATASOURCE_URL='jdbc:sqlserver://localhost:1433;database=parkspotter_test;encrypt=true;trustServerCertificate=true' \
+SPRING_DATASOURCE_USERNAME=sa SPRING_DATASOURCE_PASSWORD=tu_clave_local \
 ./scripts/e2e.sh
 ```
 

@@ -41,14 +41,15 @@ public class Review {
     @OnDelete(action = OnDeleteAction.CASCADE)
     private Reservation reservation;
 
+    // Sin ON DELETE CASCADE en garaje y autor: SQL Server no permite varios caminos de borrado en
+    // cascada hacia la misma tabla. Igual se borran con la reserva (mismo garaje y mismo conductor).
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "garage_id", nullable = false)
-    @OnDelete(action = OnDeleteAction.CASCADE)
     private Garage garage;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "author_id", nullable = false)
-    @OnDelete(action = OnDeleteAction.CASCADE)
     private UserAccount author;
 
     @Column(nullable = false)

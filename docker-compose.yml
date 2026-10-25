@@ -1,37 +1,18 @@
-# Backend + PostgreSQL + Caddy (HTTPS automático). Uso en la VM:
-#   cp .env.example .env   # y completar los valores
+# Backend + Caddy (HTTPS automático). La base de datos es Azure SQL (externa), no un contenedor. Uso:
+#   cp .env.example .env   # y completar los valores (DB_PASSWORD es obligatoria)
 #   docker compose up -d --build
-# Solo Caddy publica puertos (80/443). La API y la base de datos quedan en la red interna de Docker.
+# Solo Caddy publica puertos (80/443). La API queda en la red interna de Docker.
 # Sin dominio: comentar el servicio caddy y descomentar "ports" en api para exponer el 8080.
 
 services:
-  db:
-    image: postgres:18
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-parkspotter}
-      POSTGRES_USER: ${POSTGRES_USER:-parkspotter}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env}
-    volumes:
-      - db-data:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
   api:
     build: .
     image: parkspotter-backend:latest
     restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
+    # DB_PASSWORD (y opcionalmente DB_URL / DB_USERNAME) llegan desde .env
     env_file: .env
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-parkspotter}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-parkspotter}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en .env}
       APP_BOOTSTRAP_ROLES: "true"
     # ports:
     #   - "8080:8080"
@@ -52,6 +33,5 @@ services:
       - caddy-config:/config
 
 volumes:
-  db-data:
   caddy-data:
   caddy-config:

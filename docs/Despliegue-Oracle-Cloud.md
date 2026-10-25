@@ -1,5 +1,7 @@
 # Despliegue en Oracle Cloud Always Free
 
+> **Cambio de base de datos:** el backend ahora usa Azure SQL (`parkspotter.database.windows.net`) y `docker-compose.yml` ya no levanta un contenedor de PostgreSQL. Las partes de esta guía sobre `POSTGRES_*`, `pg_dump` y respaldos de PostgreSQL ya no aplican: en `.env` basta con `DB_PASSWORD` (ver [`.env.example`](../.env.example)). La guía de despliegue se actualizará con el nuevo plan.
+
 El backend corre en una máquina virtual gratuita de Oracle con Docker: tres contenedores (API, PostgreSQL y Caddy para HTTPS) definidos en [`docker-compose.yml`](../docker-compose.yml). La máquina no se apaga por inactividad como otros planes gratis, y el HTTPS se renueva solo.
 
 ```

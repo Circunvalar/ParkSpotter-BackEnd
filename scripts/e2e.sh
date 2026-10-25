@@ -6,8 +6,8 @@
 #
 # Uso:
 #   ./mvnw -DskipTests package
-#   SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/parkspotter_test \
-#   SPRING_DATASOURCE_USERNAME=postgres SPRING_DATASOURCE_PASSWORD=... \
+#   SPRING_DATASOURCE_URL='jdbc:sqlserver://localhost:1433;database=parkspotter_test;encrypt=true;trustServerCertificate=true' \
+#   SPRING_DATASOURCE_USERNAME=sa SPRING_DATASOURCE_PASSWORD=... \
 #   ./scripts/e2e.sh
 #
 # ¡Nunca apuntar a la base de producción! El smoke test crea usuarios y garajes de prueba.
