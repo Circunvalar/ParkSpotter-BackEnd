@@ -6,6 +6,7 @@ import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import tools.jackson.core.JacksonException;
 
 import java.time.Instant;
@@ -133,10 +135,16 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.FORBIDDEN, message, request, Map.of());
     }
 
-    @ExceptionHandler({PessimisticLockingFailureException.class, DataIntegrityViolationException.class})
+    @ExceptionHandler({PessimisticLockingFailureException.class, OptimisticLockingFailureException.class, DataIntegrityViolationException.class})
     public ResponseEntity<ApiError> handleConflict(RuntimeException ex, HttpServletRequest request) {
         log.warn("Conflicto de datos en {}: {}", request.getRequestURI(), ex.getMessage());
         return build(HttpStatus.CONFLICT, "El recurso fue modificado por otra operación, intenta de nuevo", request, Map.of());
+    }
+
+    /** Archivo más grande que spring.servlet.multipart.max-file-size (fotos de garajes). */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiError> handleTooLarge(MaxUploadSizeExceededException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONTENT_TOO_LARGE, "El archivo es demasiado grande (máximo 5 MB)", request, Map.of());
     }
 
     // ---------- infraestructura ----------

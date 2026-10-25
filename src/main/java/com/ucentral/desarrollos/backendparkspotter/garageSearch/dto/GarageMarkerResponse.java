@@ -17,6 +17,8 @@ public record GarageMarkerResponse(
         int availableSpots,
         int totalSpots,
         GarageAvailability availability,
-        boolean openNow
+        boolean openNow,
+        boolean verified,
+        double averageRating
 ) {
 }

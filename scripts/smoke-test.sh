@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Smoke test de ParkSpotter (Sprint 01 a 03): verifica de punta a punta que la API
+# Smoke test de ParkSpotter (Sprint 01 a 06): verifica de punta a punta que la API
 # desplegada funciona: autenticación, CRUD de garajes, plazas, búsqueda, mapa,
-# detalle, estado en tiempo real (SSE), validaciones, seguridad y tiempos de respuesta.
+# detalle, estado en tiempo real (SSE), reservas, pago simulado, entrada y salida,
+# comprobante, calificaciones, notificaciones, reportes, validaciones y seguridad.
+# El paso de pagos requiere app.payments.provider=sandbox (el valor por defecto).
 #
 # Uso:   BASE_URL=http://localhost:8080 ./scripts/smoke-test.sh
 # Requisitos: bash y curl (Git Bash en Windows sirve).
@@ -17,6 +19,7 @@ ORIGIN="${ORIGIN:-http://localhost:3000}"
 MAX_SECONDS="${MAX_SECONDS:-3}"
 RUN_ID="$(date +%s)"
 EMAIL="smoke-${RUN_ID}@parkspotter.co"
+DRIVER_EMAIL="smoke-driver-${RUN_ID}@parkspotter.co"
 PASSWORD="SmokeTest2026!"
 TMP_DIR="$(mktemp -d)"
 PASSED=0
@@ -67,8 +70,9 @@ printf 'Smoke test contra %s\n' "$BASE_URL"
 
 # ---------- 1. Autenticación ----------
 section "1. Autenticación"
-request POST /auth/register "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}"
-expect_status 200 "Registro de usuario"
+request POST /auth/register "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\",\"role\":\"OWNER\",\"fullName\":\"Propietaria Smoke\"}"
+expect_status 200 "Registro de propietario"
+expect_contains '"ROLE_OWNER"' "El registro devuelve el rol de propietario"
 TOKEN="$(json_value accessToken)"
 REFRESH="$(json_value refreshToken)"
 
@@ -182,8 +186,67 @@ expect_contains "\"id\":\"$GARAGE_ID\"" "El filtro por tipo de vehículo encuent
 request DELETE "/garages/$GARAGE_ID/spots/$MOTO_ID" "" "$TOKEN"
 expect_status 204 "Eliminar plaza libre"
 
-# ---------- 5. Seguridad y cierre de sesión ----------
-section "5. Seguridad y cierre de sesión"
+# ---------- 5. Reservas, pago, entrada y salida ----------
+section "5. Reservas, pago, entrada y salida"
+request POST /auth/register "{\"email\":\"$DRIVER_EMAIL\",\"password\":\"$PASSWORD\",\"fullName\":\"Conductor Smoke\"}"
+expect_status 200 "Registro de conductor (rol por defecto)"
+DRIVER_TOKEN="$(json_value accessToken)"
+
+request POST /garages "{\"name\":\"Smoke Conductor $RUN_ID\",\"addressLine\":\"Cra 7 # 12-30\",\"city\":\"Bogota\",\"state\":\"Cundinamarca\",\"country\":\"Colombia\",\"latitude\":4.71,\"longitude\":-74.07,\"totalSpots\":2,\"pricePerHour\":3000,\"open24Hours\":true}" "$DRIVER_TOKEN"
+expect_status 403 "Un conductor no puede publicar garajes"
+
+START="$(date -u -d '+1 minute' +%Y-%m-%dT%H:%M:%SZ)"
+END="$(date -u -d '+2 hours' +%Y-%m-%dT%H:%M:%SZ)"
+request GET "/garages/$GARAGE_ID/reservation-quote?vehicleType=CAR&startTime=$START&endTime=$END"
+expect_status 200 "Cotización de la franja"
+expect_contains '"available":true' "La cotización indica plazas libres"
+
+request POST /reservations "{\"garageId\":\"$GARAGE_ID\",\"vehicleType\":\"CAR\",\"vehiclePlate\":\"SMK123\",\"startTime\":\"$START\",\"endTime\":\"$END\"}" "$DRIVER_TOKEN"
+expect_status 201 "Crear reserva"
+expect_fast "Crear reserva"
+RESERVATION_ID="$(json_value id)"
+RESERVATION_CODE="$(json_value code)"
+expect_contains '"status":"PENDING_PAYMENT"' "La reserva queda pendiente de pago"
+
+request POST "/reservations/$RESERVATION_ID/payments" '{"redirectUrl":"http://localhost:3000/pagos/resultado"}' "$DRIVER_TOKEN"
+expect_status 201 "Crear pago"
+PAYMENT_ID="$(json_value id)"
+
+request POST "/payments/$PAYMENT_ID/sandbox-result" '{"status":"APPROVED"}' "$DRIVER_TOKEN"
+expect_status 200 "Aprobar el pago (pasarela simulada)"
+
+request GET "/reservations/$RESERVATION_ID" "" "$DRIVER_TOKEN"
+expect_contains '"status":"CONFIRMED"' "La reserva queda confirmada tras el pago"
+
+request POST /reservations/check-in "{\"code\":\"$RESERVATION_CODE\"}" "$TOKEN"
+expect_status 200 "Registrar entrada con el código"
+request POST /reservations/check-out "{\"code\":\"$RESERVATION_CODE\"}" "$TOKEN"
+expect_status 200 "Registrar salida con el código"
+expect_contains '"status":"COMPLETED"' "La reserva queda completada"
+
+request GET "/reservations/$RESERVATION_ID/receipt" "" "$DRIVER_TOKEN"
+expect_status 200 "Comprobante de pago"
+
+request POST "/reservations/$RESERVATION_ID/review" '{"rating":5,"comment":"Muy bien"}' "$DRIVER_TOKEN"
+expect_status 201 "Calificar el garaje"
+request GET "/garages/search?minRating=4&q=Smoke%20Centro%20$RUN_ID"
+expect_contains "\"id\":\"$GARAGE_ID\"" "El filtro por calificación encuentra el garaje"
+
+request GET /reservations/mine "" "$DRIVER_TOKEN"
+expect_contains "\"id\":\"$RESERVATION_ID\"" "Historial del conductor"
+request GET /notifications/unread-count "" "$DRIVER_TOKEN"
+expect_status 200 "Contador de notificaciones"
+request GET /reports/owner "" "$TOKEN"
+expect_status 200 "Reporte del propietario"
+
+request POST /auth/password/forgot "{\"email\":\"$DRIVER_EMAIL\"}"
+expect_status 202 "Recuperación de contraseña"
+
+STATUS="$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL/v3/api-docs")"
+if [ "$STATUS" = "200" ]; then pass "Documentación OpenAPI disponible"; else fail "OpenAPI respondió $STATUS"; fi
+
+# ---------- 6. Seguridad y cierre de sesión ----------
+section "6. Seguridad y cierre de sesión"
 PREFLIGHT="$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS "$API/auth/login" -H "Origin: $ORIGIN" \
     -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: content-type,x-client-id')"
 if [ "$PREFLIGHT" = "200" ]; then pass "CORS permite el login desde $ORIGIN con X-Client-Id"; else fail "CORS rechazó el preflight ($PREFLIGHT)"; fi

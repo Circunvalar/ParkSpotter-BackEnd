@@ -38,6 +38,18 @@ public class UserAccount {
     @Column(nullable = false)
     private boolean enabled = true;
 
+    // --- Perfil (Sprint 06, PB-05) ---
+
+    @Column(name = "full_name", length = 120)
+    private String fullName;
+
+    @Column(length = 20)
+    private String phone;
+
+    /** Si tiene valor, la cuenta fue eliminada por su dueño: los datos personales ya se anonimizaron. */
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -53,4 +65,12 @@ public class UserAccount {
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
     private Set<Role> roles = new HashSet<>();
+
+    public boolean hasRole(String roleName) {
+        return roles.stream().anyMatch(role -> roleName.equals(role.getName()));
+    }
+
+    public boolean isAdmin() {
+        return hasRole(RoleNames.ADMIN);
+    }
 }

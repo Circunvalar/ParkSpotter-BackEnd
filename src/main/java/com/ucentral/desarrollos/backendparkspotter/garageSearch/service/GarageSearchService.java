@@ -7,6 +7,7 @@ import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.Garag
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.ParkingSpot;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.SpotStatus;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.VehicleType;
+import com.ucentral.desarrollos.backendparkspotter.garageManagement.repository.GaragePhotoRepository;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.repository.GarageRepository;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.repository.ParkingSpotRepository;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.service.GarageAvailabilityAssembler;
@@ -57,6 +58,7 @@ public class GarageSearchService {
     private final GarageRepository garageRepository;
     private final ParkingSpotRepository spotRepository;
     private final GarageAvailabilityAssembler availabilityAssembler;
+    private final GaragePhotoRepository photoRepository;
 
     // ---------- búsqueda paginada ----------
 
@@ -155,6 +157,11 @@ public class GarageSearchService {
                 availabilityByVehicleType(spotRepository.countByVehicleTypeAndStatus(garageId)),
                 spotRepository.findFloorsByGarageId(garageId),
                 spots,
+                garage.getVerificationStatus(),
+                garage.isVerified(),
+                garage.getAverageRating(),
+                garage.getRatingCount(),
+                photoRepository.findMetadataByGarageId(garageId),
                 garage.getCreatedAt(),
                 garage.getUpdatedAt()
         );
@@ -202,6 +209,8 @@ public class GarageSearchService {
         if (criteria.minAvailableSpots() != null) {
             filters.add(GarageSpecifications.minAvailableSpots(criteria.minAvailableSpots()));
         }
+        if (criteria.minRating() != null) filters.add(GarageSpecifications.ratingAtLeast(criteria.minRating()));
+        if (Boolean.TRUE.equals(criteria.verifiedOnly())) filters.add(GarageSpecifications.isVerified());
         return Specification.allOf(filters);
     }
 
@@ -211,6 +220,7 @@ public class GarageSearchService {
             case PRICE_DESC -> Sort.by(Sort.Order.desc("pricePerHour"));
             case AVAILABILITY -> Sort.by(Sort.Order.desc("availableSpots"));
             case NEWEST -> Sort.by(Sort.Order.desc("createdAt"));
+            case RATING -> Sort.by(Sort.Order.desc("averageRating"), Sort.Order.desc("ratingCount"));
             case NAME, DISTANCE -> Sort.by(Sort.Order.asc("name"));
         };
         // Desempate estable para que la paginación no repita ni salte resultados.
@@ -224,6 +234,8 @@ public class GarageSearchService {
             case PRICE_DESC -> Comparator.comparing(GarageSummaryResponse::pricePerHour).reversed();
             case AVAILABILITY -> Comparator.comparingInt(GarageSummaryResponse::availableSpots).reversed();
             case NAME -> Comparator.comparing(GarageSummaryResponse::name, String.CASE_INSENSITIVE_ORDER);
+            case RATING -> Comparator.comparingDouble(GarageSummaryResponse::averageRating).reversed()
+                    .thenComparing(Comparator.comparingInt(GarageSummaryResponse::ratingCount).reversed());
             case NEWEST, DISTANCE -> byDistance;
         };
         return primary.thenComparing(byDistance).thenComparing(summary -> summary.id().toString());
@@ -275,7 +287,10 @@ public class GarageSearchService {
                 garage.getOpeningTime(),
                 garage.getClosingTime(),
                 OpeningHours.isOpenAt(garage, now),
-                distanceKm
+                distanceKm,
+                garage.isVerified(),
+                garage.getAverageRating(),
+                garage.getRatingCount()
         );
     }
 
@@ -289,7 +304,9 @@ public class GarageSearchService {
                 garage.getAvailableSpots(),
                 garage.getTotalSpots(),
                 garage.getAvailability(),
-                OpeningHours.isOpenAt(garage, now)
+                OpeningHours.isOpenAt(garage, now),
+                garage.isVerified(),
+                garage.getAverageRating()
         );
     }
 

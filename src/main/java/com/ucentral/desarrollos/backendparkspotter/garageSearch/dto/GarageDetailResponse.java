@@ -1,7 +1,9 @@
 package com.ucentral.desarrollos.backendparkspotter.garageSearch.dto;
 
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.dto.GarageAvailabilityResponse;
+import com.ucentral.desarrollos.backendparkspotter.garageManagement.dto.GaragePhotoResponse;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.dto.ParkingSpotResponse;
+import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.VerificationStatus;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -36,6 +38,12 @@ public record GarageDetailResponse(
         List<VehicleTypeAvailability> availabilityByVehicleType,
         List<Integer> floors,
         List<ParkingSpotResponse> spots,
+
+        VerificationStatus verificationStatus,
+        boolean verified,
+        double averageRating,
+        int ratingCount,
+        List<GaragePhotoResponse> photos,
 
         Instant createdAt,
         Instant updatedAt

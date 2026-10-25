@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -26,24 +27,34 @@ import static org.mockito.Mockito.when;
 class ConfigTest {
 
     @Test
-    void initRoles_CreatesRoleUser_WhenItDoesNotExist() throws Exception {
+    void initRoles_CreatesAllRoles_WhenTheyDoNotExist() throws Exception {
         RoleRepository roles = mock(RoleRepository.class);
-        when(roles.findByName("ROLE_USER")).thenReturn(Optional.empty());
+        when(roles.findByName(any())).thenReturn(Optional.empty());
         when(roles.save(any(Role.class))).thenAnswer(inv -> inv.getArgument(0));
 
         new BootstrapConfig().initRoles(roles).run();
 
-        verify(roles).save(any(Role.class));
+        // ROLE_USER, ROLE_DRIVER, ROLE_OWNER y ROLE_ADMIN
+        verify(roles, times(4)).save(any(Role.class));
     }
 
     @Test
-    void initRoles_DoesNothing_WhenRoleUserAlreadyExists() throws Exception {
+    void initRoles_DoesNothing_WhenRolesAlreadyExist() throws Exception {
         RoleRepository roles = mock(RoleRepository.class);
-        when(roles.findByName("ROLE_USER")).thenReturn(Optional.of(new Role()));
+        when(roles.findByName(any())).thenReturn(Optional.of(new Role()));
 
         new BootstrapConfig().initRoles(roles).run();
 
         verify(roles, never()).save(any());
+    }
+
+    @Test
+    void legacyRolesRunner_DelegatesToMigration() throws Exception {
+        AccountRoleMigration migration = mock(AccountRoleMigration.class);
+
+        new BootstrapConfig().migrateLegacyRoles(migration).run(new DefaultApplicationArguments());
+
+        verify(migration).run();
     }
 
     @Test

@@ -86,6 +86,7 @@ class AuthServiceUnitTest {
     void register_WhenEmailNotTaken_ShouldCreateUserAndReturnTokenPair() {
         when(userRepository.existsByEmailIgnoreCase("user@example.com")).thenReturn(false);
         when(roleRepository.findByName("ROLE_USER")).thenReturn(Optional.of(role("ROLE_USER")));
+        when(roleRepository.findByName("ROLE_DRIVER")).thenReturn(Optional.of(role("ROLE_DRIVER")));
         when(passwordEncoder.encode("Password123456")).thenReturn("hashed-pw");
 
         RegisterRequest request = new RegisterRequest("  USER@Example.com  ", "Password123456");
@@ -96,6 +97,7 @@ class AuthServiceUnitTest {
         assertThat(response.refreshToken()).isEqualTo("refresh-token");
         assertThat(response.tokenType()).isEqualTo("Bearer");
         assertThat(response.expiresInSeconds()).isEqualTo(900L);
+        assertThat(response.roles()).containsExactly("ROLE_DRIVER", "ROLE_USER");
         verify(roleRepository, never()).save(any());
         verify(loginAuditRepository, times(1)).save(any(LoginAudit.class));
     }
@@ -113,15 +115,30 @@ class AuthServiceUnitTest {
     }
 
     @Test
-    void register_WhenDefaultRoleMissing_ShouldCreateItExactlyOnce() {
+    void register_WhenRolesMissing_ShouldCreateUserAndDriverRolesOnce() {
         when(userRepository.existsByEmailIgnoreCase("new@example.com")).thenReturn(false);
-        when(roleRepository.findByName("ROLE_USER")).thenReturn(Optional.empty());
+        when(roleRepository.findByName(anyString())).thenReturn(Optional.empty());
         when(roleRepository.save(any(Role.class))).thenAnswer(inv -> inv.getArgument(0));
         when(passwordEncoder.encode(anyString())).thenReturn("hashed-pw");
 
         authService.register(new RegisterRequest("new@example.com", "Password123456"));
 
-        verify(roleRepository, times(1)).save(any(Role.class));
+        verify(roleRepository, times(2)).save(any(Role.class));
+    }
+
+    @Test
+    void register_AsOwnerWithProfile_ShouldAssignOwnerRoleAndCleanProfile() {
+        when(userRepository.existsByEmailIgnoreCase("owner@example.com")).thenReturn(false);
+        when(roleRepository.findByName("ROLE_USER")).thenReturn(Optional.of(role("ROLE_USER")));
+        when(roleRepository.findByName("ROLE_OWNER")).thenReturn(Optional.of(role("ROLE_OWNER")));
+        when(passwordEncoder.encode(anyString())).thenReturn("hashed-pw");
+
+        TokenPairResponse response = authService.register(new RegisterRequest("owner@example.com", "Password123456",
+                com.ucentral.desarrollos.backendparkspotter.auth.entity.AccountType.OWNER, "  Ana Pérez ", "   "));
+
+        assertThat(response.roles()).containsExactly("ROLE_OWNER", "ROLE_USER");
+        verify(userRepository).save(org.mockito.ArgumentMatchers.argThat(u ->
+                "Ana Pérez".equals(u.getFullName()) && u.getPhone() == null));
     }
 
     // ---------- login ----------

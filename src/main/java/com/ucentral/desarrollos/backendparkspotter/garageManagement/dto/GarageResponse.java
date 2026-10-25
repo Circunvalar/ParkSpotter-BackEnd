@@ -2,6 +2,7 @@ package com.ucentral.desarrollos.backendparkspotter.garageManagement.dto;
 
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.GarageAvailability;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.GarageStatus;
+import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.VerificationStatus;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -39,6 +40,12 @@ public record GarageResponse(
 
         GarageStatus status,
         GarageAvailability availability,
+
+        VerificationStatus verificationStatus,
+        boolean verified,
+        double averageRating,
+        int ratingCount,
+
         Instant createdAt,
         Instant updatedAt
 ) {

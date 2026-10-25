@@ -36,7 +36,9 @@ import java.util.UUID;
         @Index(name = "idx_garages_status_location", columnList = "status, latitude, longitude"),
         @Index(name = "idx_garages_status_price", columnList = "status, price_per_hour"),
         @Index(name = "idx_garages_status_available", columnList = "status, available_spots"),
-        @Index(name = "idx_garages_owner", columnList = "owner_id")
+        @Index(name = "idx_garages_owner", columnList = "owner_id"),
+        @Index(name = "idx_garages_status_rating", columnList = "status, average_rating"),
+        @Index(name = "idx_garages_verification", columnList = "verification_status")
 })
 public class Garage {
 
@@ -121,6 +123,30 @@ public class Garage {
     @Column(nullable = false, length = 20)
     private GarageStatus status = GarageStatus.ACTIVE;
 
+    // --- Verificación (Sprint 06, PB-26) ---
+
+    @Enumerated(EnumType.STRING)
+    @ColumnDefault("'UNVERIFIED'")
+    @Column(name = "verification_status", nullable = false, length = 20)
+    private VerificationStatus verificationStatus = VerificationStatus.UNVERIFIED;
+
+    /** Observaciones del administrador (motivo del rechazo, por ejemplo). */
+    @Column(name = "verification_notes", length = 500)
+    private String verificationNotes;
+
+    @Column(name = "verified_at")
+    private Instant verifiedAt;
+
+    // --- Calificaciones (Sprint 06, PB-24): promedio y cantidad, recalculados con cada reseña ---
+
+    @ColumnDefault("0")
+    @Column(name = "average_rating", nullable = false)
+    private Double averageRating = 0.0;
+
+    @ColumnDefault("0")
+    @Column(name = "rating_count", nullable = false)
+    private Integer ratingCount = 0;
+
     // --- Plazas ---
 
     @OneToMany(mappedBy = "garage", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -138,6 +164,10 @@ public class Garage {
     /** Plazas fuera de servicio: las que no están libres, ocupadas ni reservadas. */
     public int getOutOfServiceSpots() {
         return Math.max(0, totalSpots - availableSpots - occupiedSpots - reservedSpots);
+    }
+
+    public boolean isVerified() {
+        return verificationStatus == VerificationStatus.VERIFIED;
     }
 
     public GarageAvailability getAvailability() {

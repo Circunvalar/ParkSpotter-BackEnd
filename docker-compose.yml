@@ -1,0 +1,37 @@
+# Backend + Caddy (HTTPS automático). La base de datos es Azure SQL (externa), no un contenedor. Uso:
+#   cp .env.example .env   # y completar los valores (DB_PASSWORD es obligatoria)
+#   docker compose up -d --build
+# Solo Caddy publica puertos (80/443). La API queda en la red interna de Docker.
+# Sin dominio: comentar el servicio caddy y descomentar "ports" en api para exponer el 8080.
+
+services:
+  api:
+    build: .
+    image: parkspotter-backend:latest
+    restart: unless-stopped
+    # DB_PASSWORD (y opcionalmente DB_URL / DB_USERNAME) llegan desde .env
+    env_file: .env
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en .env}
+      APP_BOOTSTRAP_ROLES: "true"
+    # ports:
+    #   - "8080:8080"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Define DOMAIN en .env (o comenta el servicio caddy)}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:

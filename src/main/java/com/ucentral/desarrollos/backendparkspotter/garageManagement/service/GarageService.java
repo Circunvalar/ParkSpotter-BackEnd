@@ -8,6 +8,7 @@ import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.Garag
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.GarageStatus;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.repository.GarageRepository;
 import com.ucentral.desarrollos.backendparkspotter.shared.exception.ApiException;
+import com.ucentral.desarrollos.backendparkspotter.shared.exception.ConflictException;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -135,6 +136,9 @@ public class GarageService {
     public void delete(UUID id, UserAccount user) {
         Garage garage = findEntity(id);
         assertOwnership(garage, user);
+        if (garageRepository.hasActiveReservations(id)) {
+            throw new ConflictException("El garaje tiene reservas activas: cancélalas o desactiva el garaje en lugar de eliminarlo");
+        }
         garageRepository.delete(garage);
     }
 
@@ -182,6 +186,16 @@ public class GarageService {
     private record LocalTimePair(LocalTime opening, LocalTime closing) {
     }
 
+    /** Respuesta pública (sin correo del dueño); la usan también otros módulos (administración). */
+    public GarageResponse toPublicView(Garage garage) {
+        return toPublicResponse(garage);
+    }
+
+    /** Respuesta con el correo del dueño, para el propio dueño o un administrador. */
+    public GarageResponse toOwnerView(Garage garage) {
+        return toOwnerResponse(garage);
+    }
+
     /**
      * Respuesta para endpoints públicos: no incluye el correo del dueño (dato personal, Ley 1581 de 2012).
      * De paso evita cargar el usuario dueño por cada garaje del listado (el id sale del proxy sin consultar).
@@ -221,6 +235,10 @@ public class GarageService {
                 garage.getClosingTime(),
                 garage.getStatus(),
                 garage.getAvailability(),
+                garage.getVerificationStatus(),
+                garage.isVerified(),
+                garage.getAverageRating(),
+                garage.getRatingCount(),
                 garage.getCreatedAt(),
                 garage.getUpdatedAt()
         );

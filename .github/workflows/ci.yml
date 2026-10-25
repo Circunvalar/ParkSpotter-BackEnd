@@ -3,8 +3,8 @@
 # En cada push a master, develop o una rama Sprint-* y en cada pull request hacia master/develop:
 #   1. pruebas: compila, ejecuta todas las pruebas (unitarias, integración con H2, API, rendimiento)
 #      y exige la cobertura mínima de JaCoCo (./mvnw verify). Publica un resumen y los reportes.
-#   2. e2e: levanta la API contra un PostgreSQL 18 real (contenedor efímero) y ejecuta el smoke test
-#      de punta a punta (scripts/smoke-test.sh).
+#   2. e2e: levanta la API contra un SQL Server 2022 real (contenedor efímero, el mismo motor que
+#      Azure SQL) y ejecuta el smoke test de punta a punta (scripts/smoke-test.sh).
 # Ninguno de los dos jobs se conecta a la base de datos de producción.
 
 name: CI - Pruebas automatizadas
@@ -65,25 +65,10 @@ jobs:
           retention-days: 1
 
   e2e:
-    name: Punta a punta con PostgreSQL
+    name: Punta a punta con SQL Server
     needs: pruebas
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_DB: parkspotter_ci
-          POSTGRES_USER: parkspotter
-          # Solo existe dentro de este contenedor temporal de la CI; no es una credencial real.
-          POSTGRES_PASSWORD: parkspotter_ci
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U parkspotter -d parkspotter_ci"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 12
     steps:
       - name: Descargar el código
         uses: actions/checkout@v7
@@ -100,11 +85,29 @@ jobs:
           name: app-jar
           path: target
 
+      - name: Levantar SQL Server 2022 y crear la base de pruebas
+        # Contenedor temporal con una contraseña aleatoria por ejecución (nada fijo en el repo).
+        run: |
+          SA_PASSWORD="Ci-$(openssl rand -hex 16)"
+          echo "::add-mask::$SA_PASSWORD"
+          echo "SPRING_DATASOURCE_PASSWORD=$SA_PASSWORD" >> "$GITHUB_ENV"
+          docker run -d --name mssql -e ACCEPT_EULA=Y -e "MSSQL_SA_PASSWORD=$SA_PASSWORD" -p 1433:1433 \
+            mcr.microsoft.com/mssql/server:2022-latest
+          for i in $(seq 1 60); do
+            if docker exec mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$SA_PASSWORD" -b \
+                -Q "CREATE DATABASE parkspotter_ci" > /dev/null 2>&1; then
+              echo "SQL Server listo."; exit 0
+            fi
+            sleep 3
+          done
+          echo "SQL Server no arrancó a tiempo." >&2
+          docker logs mssql | tail -n 40 >&2
+          exit 1
+
       - name: Levantar la API y ejecutar el smoke test
         env:
-          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/parkspotter_ci
-          SPRING_DATASOURCE_USERNAME: parkspotter
-          SPRING_DATASOURCE_PASSWORD: parkspotter_ci
+          SPRING_DATASOURCE_URL: jdbc:sqlserver://localhost:1433;database=parkspotter_ci;encrypt=true;trustServerCertificate=true
+          SPRING_DATASOURCE_USERNAME: sa
           APP_BOOTSTRAP_ROLES: 'true'
           PORT: '8080'
         run: |

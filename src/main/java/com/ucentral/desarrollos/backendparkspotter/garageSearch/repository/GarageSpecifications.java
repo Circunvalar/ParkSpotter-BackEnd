@@ -5,6 +5,7 @@ import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.Garag
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.ParkingSpot;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.SpotStatus;
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.VehicleType;
+import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.VerificationStatus;
 import com.ucentral.desarrollos.backendparkspotter.garageSearch.service.GeoUtils.BoundingBox;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
@@ -63,6 +64,17 @@ public final class GarageSpecifications {
 
     public static Specification<Garage> minAvailableSpots(int min) {
         return (root, query, cb) -> cb.greaterThanOrEqualTo(root.get("availableSpots"), min);
+    }
+
+    /** Calificación promedio mínima; los garajes sin calificaciones no cumplen el filtro. */
+    public static Specification<Garage> ratingAtLeast(double min) {
+        return (root, query, cb) -> cb.and(
+                cb.greaterThan(root.get("ratingCount"), 0),
+                cb.greaterThanOrEqualTo(root.get("averageRating"), min));
+    }
+
+    public static Specification<Garage> isVerified() {
+        return (root, query, cb) -> cb.equal(root.get("verificationStatus"), VerificationStatus.VERIFIED);
     }
 
     /**
