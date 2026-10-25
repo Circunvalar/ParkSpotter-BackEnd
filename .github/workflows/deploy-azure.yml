@@ -1,0 +1,95 @@
+# Despliegue de ParkSpotter Backend en Azure App Service (ver docs/Despliegue-Azure.md).
+#
+# Cuando la CI termina bien en master (o a mano con "Run workflow"):
+#   1. imagen: construye la imagen Docker y la publica en GitHub Container Registry como
+#      ghcr.io/circunvalar/parkspotter-backend:latest y :sha-<commit>.
+#   2. azure: si existe la variable AZURE_WEBAPP_NAME, apunta la Web App a la imagen nueva y espera
+#      a que responda. Necesita el secreto AZURE_CREDENTIALS y la variable AZURE_RESOURCE_GROUP.
+#      Sin esa configuración el job se omite y la app se actualiza a mano.
+# Los secretos de la app (DB_PASSWORD, JWT_SECRET, ...) viven en Application settings de Azure, no aquí.
+
+name: Despliegue - Azure App Service
+
+on:
+  workflow_run:
+    workflows: ['CI - Pruebas automatizadas']
+    types: [completed]
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-azure
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/circunvalar/parkspotter-backend
+  COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+jobs:
+  imagen:
+    name: Publicar imagen en GHCR
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Descargar el código probado
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.COMMIT }}
+
+      - name: Preparar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Iniciar sesión en GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Construir y publicar (linux/amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:sha-${{ env.COMMIT }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  azure:
+    name: Actualizar la Web App
+    needs: imagen
+    if: vars.AZURE_WEBAPP_NAME != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Iniciar sesión en Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Usar la imagen nueva
+        run: |
+          az webapp config container set -g "${{ vars.AZURE_RESOURCE_GROUP }}" -n "${{ vars.AZURE_WEBAPP_NAME }}" \
+            --container-image-name "$IMAGE:sha-$COMMIT" --output none
+          az webapp restart -g "${{ vars.AZURE_RESOURCE_GROUP }}" -n "${{ vars.AZURE_WEBAPP_NAME }}"
+
+      - name: Esperar a que la API responda
+        run: |
+          HOST=$(az webapp show -g "${{ vars.AZURE_RESOURCE_GROUP }}" -n "${{ vars.AZURE_WEBAPP_NAME }}" --query defaultHostName -o tsv)
+          echo "API: https://$HOST" >> "$GITHUB_STEP_SUMMARY"
+          for i in $(seq 1 40); do
+            if curl -fsS -o /dev/null --max-time 10 "https://$HOST/v3/api-docs"; then
+              echo "La API responde."; exit 0
+            fi
+            sleep 15
+          done
+          echo "La API no respondió en 10 minutos. Revisar: az webapp log tail" >&2
+          exit 1
