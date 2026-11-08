@@ -58,6 +58,10 @@ public class Review {
     @Column(length = 500)
     private String comment;
 
+    /** Seguridad percibida del lugar (1 a 5), opcional: refuerza la confianza en garajes en desuso. */
+    @Column(name = "security_rating")
+    private Integer securityRating;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

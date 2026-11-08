@@ -1,25 +1,25 @@
 # Cómo conectar el front web y la app móvil al backend
 
-El backend desplegado en Azure es el único servidor de ParkSpotter: el front web y la app Android hablan con él por HTTPS y él es el único que habla con la base Azure SQL. Ningún cliente se conecta directo a la base ni guarda sus credenciales.
+El backend desplegado en Render es el único servidor de ParkSpotter: el front web y la app Android hablan con él por HTTPS y él es el único que habla con la base PostgreSQL (Neon). Ningún cliente se conecta directo a la base ni guarda sus credenciales.
 
 ```
-Front web (navegador) ──┐
-                        ├── HTTPS ──▶ https://<API_HOST>/api/v1/... ──▶ Azure SQL
-App Android ────────────┘
+Front web (Vercel) ──┐
+                     ├── HTTPS ──▶ https://<API_HOST>/api/v1/... ──▶ PostgreSQL (Neon)
+App Android ─────────┘
 ```
 
-Cómo crear el servidor: [Despliegue-Azure.md](Despliegue-Azure.md). Lista completa de endpoints: [API-Referencia.md](API-Referencia.md).
+Cómo crear el servidor gratis: [Despliegue-Gratuito.md](Despliegue-Gratuito.md). Lista completa de endpoints: [API-Referencia.md](API-Referencia.md).
 
 ## 1. URL base
 
 | Entorno | URL base | Dónde se usa |
 |---|---|---|
-| Producción (Azure) | `https://<API_HOST>`, por ejemplo `https://parkspotter-api.azurewebsites.net` o el dominio propio `https://api.parkspotter.co` | Web y Android publicados |
+| Producción (Render) | `https://<API_HOST>`, por ejemplo `https://parkspotter-api.onrender.com` | Web y Android publicados |
 | Local | `http://localhost:8080` | Front web en la misma computadora |
 | Emulador Android | `http://10.0.2.2:8080` | El emulador ve la computadora en `10.0.2.2` |
 | Celular físico en la misma red | `http://<IP-de-la-computadora>:8080` | Solo desarrollo |
 
-`<API_HOST>` es el valor que da `az webapp show -g rg-parkspotter -n <app> --query defaultHostName -o tsv` (paso 5 de la guía de despliegue). Todas las rutas de la API empiezan por `/api/v1`. La documentación interactiva está en `<URL base>/swagger-ui.html` y el contrato OpenAPI en `<URL base>/v3/api-docs`.
+`<API_HOST>` es la URL que muestra Render arriba a la izquierda del servicio (paso 2 de la guía de despliegue). Todas las rutas de la API empiezan por `/api/v1`. La documentación interactiva está en `<URL base>/swagger-ui.html` y el contrato OpenAPI en `<URL base>/v3/api-docs`.
 
 La URL base nunca se escribe en el código: va en la configuración de cada cliente (sección 3 y 4), así cambiar de servidor o de dominio no requiere tocar código.
 
@@ -34,6 +34,8 @@ La URL base nunca se escribe en el código: va en la configuración de cada clie
 | Configuración | `VITE_API_URL` o `NEXT_PUBLIC_API_URL` | `buildConfigField("String", "API_URL", …)` terminada en `/` |
 | Volver del pago | URL del front en `PAYMENTS_REDIRECT_PREFIXES` (con `/` final) | Deep link `parkspotter://` (ya permitido) |
 
+**Servidor dormido (plan gratis).** Si nadie usa la API por 15 minutos, Render la duerme y la primera petición tarda cerca de un minuto. Los fronts deben usar un *timeout* de al menos 60 s en esa primera llamada (o llamar antes a `GET /api/v1/health`) y mostrar "Conectando con el servidor…". Con el monitor de la guía de despliegue (paso 7) no se duerme.
+
 El backend acepta peticiones de cualquier red: no hay que registrar la IP de los usuarios. Lo único que se registra en el servidor son los **orígenes del front web** (CORS) y los **prefijos de retorno del pago**.
 
 ## 3. Front web
@@ -45,28 +47,29 @@ El backend acepta peticiones de cualquier red: no hay que registrar la IP de los
    # .env.development
    VITE_API_URL=http://localhost:8080
    # .env.production
-   VITE_API_URL=https://parkspotter-api.azurewebsites.net
+   VITE_API_URL=https://parkspotter-api.onrender.com
    ```
 
    (En Next.js: `NEXT_PUBLIC_API_URL`.)
 
-3. Pedir a quien administra el backend que agregue el dominio del front en Azure:
+3. Pedir a quien administra el backend que agregue el dominio del front en Render (servicio → **Environment**):
 
-   ```bash
-   az webapp config appsettings set -g rg-parkspotter -n <app> --output none --settings \
-     APP_CORS_ALLOWED_ORIGINS="https://parkspotter-web.ejemplo.com,http://localhost:3000" \
-     PAYMENTS_REDIRECT_PREFIXES="https://parkspotter-web.ejemplo.com/,parkspotter://" \
-     PAYMENTS_DEFAULT_REDIRECT="https://parkspotter-web.ejemplo.com/pagos/resultado" \
-     RESET_PASSWORD_URL="https://parkspotter-web.ejemplo.com/restablecer-contrasena"
+   ```
+   APP_CORS_ALLOWED_ORIGINS=https://parkspotter-web.vercel.app,https://*.vercel.app,http://localhost:3000
+   PAYMENTS_REDIRECT_PREFIXES=https://parkspotter-web.vercel.app/,parkspotter://
+   PAYMENTS_DEFAULT_REDIRECT=https://parkspotter-web.vercel.app/pagos/resultado
+   RESET_PASSWORD_URL=https://parkspotter-web.vercel.app/restablecer-contrasena
    ```
 
-   Si el front está en Vercel, Netlify o Azure Static Web Apps, el origen es la URL que da ese servicio (por ejemplo `https://parkspotter-web.vercel.app`). Cada dominio de vista previa distinto también debe agregarse si se quiere probar contra producción.
+   Si el front está en Vercel, Netlify o Cloudflare Pages, el origen es la URL que da ese servicio. Para las vistas previas (cada rama tiene una URL distinta) basta un comodín como `https://*.vercel.app`.
 
 **CORS en detalle.** El backend responde a los orígenes de la lista con:
 
 - Métodos: `GET, POST, PUT, PATCH, DELETE, OPTIONS`.
 - Headers permitidos: `Authorization, Content-Type, Accept, X-Request-Id, X-Client-Id, Last-Event-ID, Cache-Control`.
 - Sin cookies (`credentials` no se usa): la sesión viaja en el header `Authorization`, así que `fetch` no necesita `credentials: 'include'`.
+
+- Se aceptan orígenes exactos y comodines (`https://*.vercel.app`, `https://*.netlify.app`).
 
 Si el navegador muestra *blocked by CORS policy*, el origen no está en la lista o tiene una `/` al final.
 
@@ -84,7 +87,7 @@ Si el navegador muestra *blocked by CORS policy*, el origen no está en la lista
                manifestPlaceholders["cleartext"] = "true"
            }
            release {
-               buildConfigField("String", "API_URL", "\"https://parkspotter-api.azurewebsites.net/\"")
+               buildConfigField("String", "API_URL", "\"https://parkspotter-api.onrender.com/\"")
                manifestPlaceholders["cleartext"] = "false"
            }
        }
@@ -93,7 +96,7 @@ Si el navegador muestra *blocked by CORS policy*, el origen no está en la lista
 
    Y en `AndroidManifest.xml`: `<application android:usesCleartextTraffic="${cleartext}" …>`.
 
-3. Crear el cliente con `ParkSpotterClient(baseUrl = BuildConfig.API_URL, …)`. El cliente ya agrega el token, lo renueva ante un 401 y traduce los errores.
+3. Crear el cliente con `ParkSpotterClient(baseUrl = BuildConfig.API_URL, …)`. El cliente ya agrega el token, lo renueva ante un 401 y traduce los errores. Su `readTimeout` es de 30 s: si el servidor gratis está dormido, la primera llamada puede fallar por tiempo; reintentar una vez o subirlo a 60 s.
 
 ## 5. Autenticación y headers
 
@@ -116,31 +119,32 @@ Dónde guardar los tokens: en web, `localStorage` (valor por defecto del cliente
 
 ## 6. Tiempo real (disponibilidad de plazas)
 
-La disponibilidad en vivo usa **Server-Sent Events** sobre la misma URL HTTPS (`GET /api/v1/garages/availability/stream` para todos los garajes o `GET /api/v1/garages/{id}/availability/stream` para uno; ver [API-Referencia.md](API-Referencia.md)). No requiere puertos ni configuración extra en Azure: el servidor manda un latido cada 25 segundos para que la conexión no se corte, y si se corta el cliente se reconecta solo. Cerrar el stream al salir de la pantalla.
+La disponibilidad en vivo usa **Server-Sent Events** sobre la misma URL HTTPS (`GET /api/v1/garages/availability/stream` para todos los garajes o `GET /api/v1/garages/{id}/availability/stream` para uno; ver [API-Referencia.md](API-Referencia.md)). No requiere puertos ni configuración extra en el hosting: el servidor manda un latido cada 25 segundos para que la conexión no se corte, y si se corta el cliente se reconecta solo. Cerrar el stream al salir de la pantalla.
 
 ## 7. Requisitos del servidor (referencia)
 
 | Tema | Valor |
 |---|---|
-| Hosting | Azure App Service para contenedores (Linux), plan B1 o superior, *Always On*, 1 instancia |
-| Imagen | `ghcr.io/circunvalar/parkspotter-backend` (Docker, `linux/amd64`), construida con el [`Dockerfile`](../Dockerfile) |
-| Java | 21 (Eclipse Temurin, incluido en la imagen) |
-| Spring Boot | 4 |
-| Puerto del contenedor | `8080` (`WEBSITES_PORT=8080`). Hacia Internet solo 443 (HTTPS); el 80 redirige a 443. |
-| Base de datos | Azure SQL `parkspotter.database.windows.net:1433`, base `ParkSpotterDatabase`, con el firewall abierto para la app |
-| Variables obligatorias | `DB_PASSWORD`, `JWT_SECRET`, `WEBSITES_PORT`, `APP_BOOTSTRAP_ROLES=true`, `APP_CORS_ALLOWED_ORIGINS` |
-| Variables según funciones | `ADMIN_EMAIL`, `PAYMENTS_*`, `WOMPI_*`, `RESET_PASSWORD_URL`, `MAIL_*`, `FCM_*` (tabla completa en la guía de despliegue) |
+| Hosting | Render, Web Service **Free** (Docker), región Virginia, 1 instancia ([`render.yaml`](../render.yaml)) |
+| Imagen | Construida por Render con el [`Dockerfile`](../Dockerfile); también se publica en `ghcr.io/circunvalar/parkspotter-backend` |
+| Java / Spring Boot | 21 (Eclipse Temurin, en la imagen) / 4 |
+| Puerto | El que indique `PORT` (8080 en local). Hacia Internet solo 443 (HTTPS). |
+| Base de datos | PostgreSQL en Neon (Free), conexión con `sslmode=require` |
+| Variables obligatorias | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`, `APP_BOOTSTRAP_ROLES=true`, `APP_CORS_ALLOWED_ORIGINS` |
+| Variables según funciones | `ADMIN_EMAIL`, `PAYMENTS_*`, `WOMPI_*`, `RESET_PASSWORD_URL`, `MAIL_*`, `FCM_*`, `SUPPORT_*` (tabla completa en la guía de despliegue) |
+| Estado | `GET /api/v1/health` (público): `{ status, database, time }`, 503 si la base no responde |
 | Zona horaria | `America/Bogota` (en la imagen) |
 
-Para desarrollar en local: Java 21 y la variable `DB_PASSWORD` (ver el [README](../README.md)), o Docker con `docker compose up -d --build`, que deja la API en `http://localhost:8080`.
+Para desarrollar en local: `docker compose up -d --build` levanta PostgreSQL y la API en `http://localhost:8080` (ver el [README](../README.md)).
 
 ## 8. Comprobar la conexión
 
 ```bash
+curl -i https://<API_HOST>/api/v1/health                               # 200 {"status":"UP",...}
 curl -i https://<API_HOST>/api/v1/garages/search                      # 200 con JSON
 curl -i -X OPTIONS https://<API_HOST>/api/v1/auth/login \
-  -H "Origin: https://parkspotter-web.ejemplo.com" \
+  -H "Origin: https://parkspotter-web.vercel.app" \
   -H "Access-Control-Request-Method: POST"                          # debe traer Access-Control-Allow-Origin
 ```
 
-O la prueba completa: `BASE_URL=https://<API_HOST> ORIGIN=https://parkspotter-web.ejemplo.com ./scripts/smoke-test.sh`.
+O la prueba completa: `BASE_URL=https://<API_HOST> ORIGIN=https://parkspotter-web.vercel.app ./scripts/smoke-test.sh`.

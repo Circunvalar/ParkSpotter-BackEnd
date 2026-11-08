@@ -87,4 +87,26 @@ class ReviewApiTest extends ApiTestSupport {
                 .andExpect(jsonPath("$.ratingCount").value(0));
         perform(delete("/api/v1/reviews/" + reviewB), admin).andExpect(status().isNotFound());
     }
+
+    @Test
+    void securityRating_IsOptional_AndAveragedSeparately() throws Exception {
+        String first = completedReservation(driver, owner, garage.id());
+        String second = completedReservation(otherDriver, owner, garage.id());
+        performJson(post("/api/v1/reservations/" + first + "/review"), driver, "{\"rating\":5,\"securityRating\":4}")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.securityRating").value(4));
+        performJson(post("/api/v1/reservations/" + second + "/review"), otherDriver, "{\"rating\":3}")
+                .andExpect(jsonPath("$.securityRating").doesNotExist());
+
+        mockMvc.perform(get("/api/v1/garages/" + garage.id() + "/detail"))
+                .andExpect(jsonPath("$.averageRating").value(4.0))
+                .andExpect(jsonPath("$.averageSecurityRating").value(4.0))
+                .andExpect(jsonPath("$.securityRatingCount").value(1));
+        mockMvc.perform(get("/api/v1/garages/" + garage.id()))
+                .andExpect(jsonPath("$.securityRatingCount").value(1));
+
+        String pending = reserveId(driver, garage.id(), 120, 180);
+        performJson(post("/api/v1/reservations/" + pending + "/review"), driver, "{\"rating\":3,\"securityRating\":0}")
+                .andExpect(status().isBadRequest());
+    }
 }

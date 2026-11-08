@@ -15,7 +15,9 @@ public class CorsConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource(@Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(allowedOrigins);
+        // Patrones: además de orígenes exactos se aceptan comodines como https://*.vercel.app
+        // (vistas previas de Vercel o Netlify). Sin credenciales (cookies), así que es seguro.
+        configuration.setAllowedOriginPatterns(allowedOrigins.stream().map(String::trim).filter(o -> !o.isEmpty()).toList());
         configuration.setAllowCredentials(false);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         // X-Client-Id lo usa el login; Last-Event-ID lo envía EventSource al reconectarse al stream SSE.

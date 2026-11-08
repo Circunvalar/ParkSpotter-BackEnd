@@ -13,5 +13,6 @@ public enum NotificationType {
     NEW_REVIEW,
     GARAGE_VERIFIED,
     GARAGE_REJECTED,
+    SUPPORT_UPDATE,
     ACCOUNT
 }

@@ -1,9 +1,10 @@
-# Referencia de la API de ParkSpotter (Sprints 01 a 06)
+# Referencia de la API de ParkSpotter (Sprints 01 a 06 y cierre)
 
 Guía para quien implemente los fronts **web** y **Android**. Cada endpoint indica método, ruta, autenticación, cuerpo, respuesta y errores.
 
-- **Base:** `https://<API_HOST>`, el servidor en Azure App Service (por ejemplo `https://parkspotter-api.azurewebsites.net`; local: `http://localhost:8080`; emulador Android: `http://10.0.2.2:8080`). En producción solo HTTPS.
-- **Conexión de los fronts** (URL base por entorno, CORS, headers, requisitos de web y Android): [Conexion-Web-y-Movil.md](Conexion-Web-y-Movil.md). Despliegue del servidor: [Despliegue-Azure.md](Despliegue-Azure.md).
+- **Base:** `https://<API_HOST>`, el servidor en Render (por ejemplo `https://parkspotter-api.onrender.com`; local: `http://localhost:8080`; emulador Android: `http://10.0.2.2:8080`). En producción solo HTTPS.
+- **Conexión de los fronts** (URL base por entorno, CORS, headers, requisitos de web y Android): [Conexion-Web-y-Movil.md](Conexion-Web-y-Movil.md). Despliegue gratuito del servidor: [Despliegue-Gratuito.md](Despliegue-Gratuito.md).
+- **Estado del servidor:** `GET /api/v1/health` (público) → `{ "status": "UP", "database": "UP", "time": "…" }`; 503 con `DOWN` si la base no responde.
 - **Swagger UI** (probar en el navegador): `/swagger-ui.html`. Contrato OpenAPI en JSON: `/v3/api-docs`.
 - **Clientes listos para copiar:** [clients/web](../clients/web/README.md) (TypeScript) y [clients/android](../clients/android/README.md) (Kotlin + Retrofit).
 - La búsqueda, el mapa y el tiempo real están explicados con más detalle en [API-Sprint-03-Busqueda-Garajes.md](API-Sprint-03-Busqueda-Garajes.md).
@@ -23,8 +24,9 @@ Guía para quien implemente los fronts **web** y **Android**. Cada endpoint indi
 11. [Notificaciones](#11-notificaciones)
 12. [Reportes](#12-reportes)
 13. [Administración](#13-administración)
-14. [Flujos completos](#14-flujos-completos)
-15. [Enums](#15-enums)
+14. [Soporte](#14-soporte)
+15. [Flujos completos](#15-flujos-completos)
+16. [Enums](#16-enums)
 
 ---
 
@@ -82,7 +84,7 @@ Una cuenta tiene siempre `ROLE_USER` y además uno o varios de estos roles:
 
 - Al registrarse se elige `DRIVER` (por defecto) u `OWNER`. Después se puede activar el otro con `POST /api/v1/users/me/roles`.
 - Los roles llegan en `roles` del login y de `/users/me`. Úsenlos para mostrar u ocultar menús. El backend vuelve a comprobarlos en cada llamada.
-- El primer administrador se configura con la variable `ADMIN_EMAIL` (ver la [guía de despliegue](Despliegue-Azure.md#9-crear-la-cuenta-administradora)).
+- El primer administrador se configura con la variable `ADMIN_EMAIL` (ver la [guía de despliegue](Despliegue-Gratuito.md#4-crear-la-cuenta-administradora)).
 
 ---
 
@@ -166,7 +168,7 @@ Base: `/api/v1/users/me`. Requiere sesión.
 
 Base: `/api/v1/garages`.
 
-**`Garage`:** `{ id, name, description, phone, ownerId, ownerEmail, addressLine, city, state, country, postalCode, latitude, longitude, totalSpots, availableSpots, occupiedSpots, reservedSpots, outOfServiceSpots, pricePerHour, open24Hours, openingTime, closingTime, status, availability, verificationStatus, verified, averageRating, ratingCount, createdAt, updatedAt }`
+**`Garage`:** `{ id, name, description, phone, ownerId, ownerEmail, addressLine, city, state, country, postalCode, latitude, longitude, totalSpots, availableSpots, occupiedSpots, reservedSpots, outOfServiceSpots, pricePerHour, open24Hours, openingTime, closingTime, status, availability, verificationStatus, verified, averageRating, ratingCount, averageSecurityRating, securityRatingCount, createdAt, updatedAt }`
 
 `ownerEmail` solo llega al dueño o a un administrador; en las consultas públicas es `null`.
 
@@ -247,7 +249,7 @@ Todos son `GET` públicos. Detalle completo en [API-Sprint-03-Busqueda-Garajes.m
 | `verifiedOnly` | `true`: solo garajes verificados. |
 | `sort=RATING` | Mejor calificados primero. |
 
-**Campos nuevos:** `GarageSummary`, `GarageMarker` y `GarageDetail` traen `verified`, `averageRating` y `ratingCount` (el marcador no trae `ratingCount`). `GarageDetail` trae además `verificationStatus` y `photos`.
+**Campos nuevos:** `GarageSummary`, `GarageMarker` y `GarageDetail` traen `verified`, `averageRating` y `ratingCount` (el marcador no trae `ratingCount`). `GarageDetail` trae además `verificationStatus`, `photos`, `averageSecurityRating` y `securityRatingCount` (seguridad percibida, ver 10).
 
 ---
 
@@ -371,15 +373,15 @@ Con la pasarela simulada, `checkoutUrl` es la misma `redirectUrl` con `?referenc
 
 ## 10. Reseñas
 
-**`Review`:** `{ id, garageId, reservationId, rating, comment, authorName, createdAt }`. `authorName` es solo el primer nombre (o "Usuario").
+**`Review`:** `{ id, garageId, reservationId, rating, comment, securityRating, authorName, createdAt }`. `authorName` es solo el primer nombre (o "Usuario"). `securityRating` (1 a 5, opcional) es qué tan seguro se sintió el lugar: refuerza la confianza en garajes privados.
 
 | Método y ruta | Auth | Cuerpo | Respuesta | Errores |
 |---|---|---|---|---|
-| `POST /api/v1/reservations/{id}/review` | Conductor de la reserva | `{ "rating": 5, "comment": "Muy bien" }` | 201 `Review` | 400 (rating 1 a 5, comentario máx. 500), 403, 404, 409 si no está `COMPLETED` o ya se calificó |
+| `POST /api/v1/reservations/{id}/review` | Conductor de la reserva | `{ "rating": 5, "comment": "Muy bien", "securityRating": 4 }` | 201 `Review` | 400 (rating y securityRating de 1 a 5, comentario máx. 500), 403, 404, 409 si no está `COMPLETED` o ya se calificó |
 | `GET /api/v1/garages/{id}/reviews?page=0&size=10` | Público | — | 200 `Page<Review>` | 404 |
 | `DELETE /api/v1/reviews/{reviewId}` | Autor o ADMIN | — | 204 | 403, 404 |
 
-El promedio del garaje (`averageRating`, `ratingCount`) se actualiza solo al crear o borrar.
+El promedio del garaje (`averageRating`, `ratingCount`) y el de seguridad (`averageSecurityRating`, `securityRatingCount`, solo con las reseñas que la incluyen) se actualizan al crear o borrar.
 
 ---
 
@@ -387,7 +389,7 @@ El promedio del garaje (`averageRating`, `ratingCount`) se actualiza solo al cre
 
 Base: `/api/v1/notifications`. Requiere sesión.
 
-**`Notification`:** `{ id, type, title, body, referenceId, read, readAt, createdAt }`. `referenceId` es el id de la reserva (tipos `RESERVATION_*`, `CHECK_*`, `PAYMENT_*`) o del garaje (`NEW_REVIEW`, `GARAGE_*`): úsenlo para abrir la pantalla correspondiente al tocar la notificación.
+**`Notification`:** `{ id, type, title, body, referenceId, read, readAt, createdAt }`. `referenceId` es el id de la reserva (tipos `RESERVATION_*`, `CHECK_*`, `PAYMENT_*`), del garaje (`NEW_REVIEW`, `GARAGE_*`) o del caso de soporte (`SUPPORT_UPDATE`): úsenlo para abrir la pantalla correspondiente al tocar la notificación.
 
 | Método y ruta | Descripción | Respuesta |
 |---|---|---|
@@ -400,7 +402,7 @@ Base: `/api/v1/notifications`. Requiere sesión.
 
 **Push:** Firebase Cloud Messaging. El push trae `notification.title`, `notification.body` y en `data` los campos `type` y `referenceId`. Si el backend no tiene credenciales de Firebase, las notificaciones igual quedan en la bandeja.
 
-**Cuándo se generan:** al conductor: reserva creada, confirmada (pago aprobado), cancelada (por correo si la canceló el garaje), vencida, no presentada, recordatorio 30 min antes del inicio, entrada, salida y pago rechazado. Al dueño: nueva reserva pagada, reserva cancelada, nueva reseña y garaje verificado o rechazado (también por correo). `ACCOUNT` queda reservado para avisos de cuenta.
+**Cuándo se generan:** soporte (`SUPPORT_UPDATE`, también por correo): cuando soporte responde un caso o lo marca resuelto o cerrado; `referenceId` es el id del caso. Al conductor: reserva creada, confirmada (pago aprobado), cancelada (por correo si la canceló el garaje), vencida, no presentada, recordatorio 30 min antes del inicio, entrada, salida y pago rechazado. Al dueño: nueva reserva pagada, reserva cancelada, nueva reseña y garaje verificado o rechazado (también por correo). `ACCOUNT` queda reservado para avisos de cuenta.
 
 ---
 
@@ -436,6 +438,25 @@ Igual que el del propietario pero de toda la plataforma, más:
 - `averageSearchToReservationSeconds`: promedio del tiempo entre `searchStartedAt` y la reserva (null si no hay datos).
 - `topGarages`: los 5 garajes con más ingresos.
 
+### GET `/api/v1/reports/driver?from=&to=` (cualquier cuenta con sesión)
+
+Reporte personal del conductor: sus reservas cuya franja empieza en el rango.
+
+```json
+{
+  "from": "2026-04-11", "to": "2026-05-10", "currency": "COP",
+  "totalReservations": 9, "paidReservations": 7, "completed": 6, "cancelled": 1, "expired": 1, "noShow": 0,
+  "upcoming": 1, "totalSpent": 52000.00, "overtimeAmount": 2000.00, "parkedMinutes": 610, "garagesUsed": 3,
+  "frequentGarages": [ { "garageId": "…", "name": "Garaje Centro", "reservations": 4, "spent": 30000.00 } ],
+  "daily": [ { "date": "2026-04-11", "reservations": 0, "revenue": 0.00 } ]
+}
+```
+
+- `totalSpent`: lo pagado en línea (reservas pagadas y no canceladas). `overtimeAmount`: tiempo extra calculado en las salidas (se paga en el garaje).
+- `upcoming`: confirmadas que aún no empiezan. `parkedMinutes`: suma de entrada a salida.
+- `frequentGarages`: hasta 5, por reservas pagadas. En `daily`, `revenue` es lo que gastó ese día.
+- 400 rango inválido, 401 sin sesión.
+
 ---
 
 ## 13. Administración
@@ -454,7 +475,28 @@ Base: `/api/v1/admin`. Solo `ROLE_ADMIN` (403 para los demás).
 
 ---
 
-## 14. Flujos completos
+## 14. Soporte
+
+Módulo de ayuda (RNF-10): preguntas frecuentes, canal de contacto y casos atendidos por los administradores.
+
+| Método y ruta | Auth | Cuerpo o params | Respuesta | Errores |
+|---|---|---|---|---|
+| `GET /api/v1/support/faqs` | Público | `category` opcional (`TicketCategory`) | 200 `Faq[]`: `{ id, category, question, answer }` | 400 categoría desconocida |
+| `GET /api/v1/support/contact` | Público | — | 200 `{ email, phone, hours }` | — |
+| `POST /api/v1/support/tickets` | Sesión | `{ "subject": "No llegó el comprobante", "category": "PAYMENT", "message": "…", "reservationId": null }` | 201 `Ticket` (`OPEN`) | 400 (asunto 5 a 150, mensaje 10 a 2000), 403 reserva ajena, 404 reserva, 409 ya tiene 5 casos abiertos |
+| `GET /api/v1/support/tickets/mine` | Sesión | `status`, `page`, `size` (20) | 200 `Page<Ticket>` (sin mensajes, más recientes primero) | — |
+| `GET /api/v1/support/tickets/{id}` | Autor o ADMIN | — | 200 `Ticket` con la conversación | 403, 404 |
+| `POST /api/v1/support/tickets/{id}/messages` | Autor o ADMIN | `{ "body": "…" }` (máx. 2000) | 200 `Ticket` | 400, 403, 404, 409 si está `CLOSED` |
+| `GET /api/v1/admin/support/tickets` | ADMIN | `status`, `page`, `size` | 200 `Page<Ticket>` (más antiguos primero) | 403 |
+| `PATCH /api/v1/admin/support/tickets/{id}/status` | ADMIN | `{ "status": "RESOLVED" }` | 200 `Ticket` | 400, 403, 404 |
+
+**`Ticket`:** `{ id, subject, category, status, reservationId, userId, userEmail, messageCount, messages: [{ id, fromStaff, authorName, body, createdAt }], resolvedAt, createdAt, updatedAt }`. `userEmail` solo llega a los administradores; `messages` va vacío en los listados. En las respuestas de soporte `authorName` es "Soporte ParkSpotter".
+
+**Estados:** `OPEN` (esperando a soporte) → un admin responde → `IN_PROGRESS` (el usuario recibe notificación `SUPPORT_UPDATE` y correo) → el admin lo marca `RESOLVED` o `CLOSED`. Si el usuario responde un caso `IN_PROGRESS` o `RESOLVED`, vuelve a `OPEN`. Un caso `CLOSED` no admite más mensajes.
+
+---
+
+## 15. Flujos completos
 
 ### Conductor: reservar y pagar
 
@@ -474,6 +516,12 @@ Base: `/api/v1/admin`. Solo `ROLE_ADMIN` (403 para los demás).
 4. Llega un carro: `POST /reservations/check-in` con el código. Sale: `POST /reservations/check-out`.
 5. Reporte: `GET /reports/owner`.
 
+### Ayuda y soporte (cualquier usuario)
+
+1. Mostrar `GET /support/faqs` y `GET /support/contact` (no requieren sesión).
+2. Si no se resuelve: `POST /support/tickets` (con `reservationId` si es sobre una reserva).
+3. Al tocar la notificación `SUPPORT_UPDATE`: `GET /support/tickets/{referenceId}` y responder con `POST /support/tickets/{id}/messages`.
+
 ### Sesión en los fronts
 
 1. Login → guardar `accessToken`, `refreshToken` y `roles`.
@@ -485,7 +533,7 @@ Los clientes de `clients/` ya hacen los pasos 2 y 3.
 
 ---
 
-## 15. Enums
+## 16. Enums
 
 | Enum | Valores |
 |---|---|
@@ -500,4 +548,6 @@ Los clientes de `clients/` ya hacen los pasos 2 y 3.
 | `ReservationStatus` | `PENDING_PAYMENT`, `CONFIRMED`, `CHECKED_IN`, `COMPLETED`, `CANCELLED`, `EXPIRED`, `NO_SHOW` |
 | `PaymentStatus` | `PENDING`, `APPROVED`, `DECLINED`, `VOIDED`, `ERROR`, `REFUND_PENDING` |
 | `DevicePlatform` | `ANDROID`, `IOS`, `WEB` |
-| `NotificationType` | `RESERVATION_CREATED`, `RESERVATION_CONFIRMED`, `RESERVATION_CANCELLED`, `RESERVATION_EXPIRED`, `RESERVATION_NO_SHOW`, `RESERVATION_REMINDER`, `CHECK_IN`, `CHECK_OUT`, `PAYMENT_DECLINED`, `NEW_REVIEW`, `GARAGE_VERIFIED`, `GARAGE_REJECTED`, `ACCOUNT` |
+| `NotificationType` | `RESERVATION_CREATED`, `RESERVATION_CONFIRMED`, `RESERVATION_CANCELLED`, `RESERVATION_EXPIRED`, `RESERVATION_NO_SHOW`, `RESERVATION_REMINDER`, `CHECK_IN`, `CHECK_OUT`, `PAYMENT_DECLINED`, `NEW_REVIEW`, `GARAGE_VERIFIED`, `GARAGE_REJECTED`, `SUPPORT_UPDATE`, `ACCOUNT` |
+| `TicketCategory` | `ACCOUNT`, `RESERVATION`, `PAYMENT`, `GARAGE`, `TECHNICAL`, `OTHER` |
+| `TicketStatus` | `OPEN`, `IN_PROGRESS`, `RESOLVED`, `CLOSED` |

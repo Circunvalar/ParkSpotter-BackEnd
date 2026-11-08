@@ -2,6 +2,7 @@ package com.ucentral.desarrollos.backendparkspotter.report.controller;
 
 import com.ucentral.desarrollos.backendparkspotter.auth.entity.UserAccount;
 import com.ucentral.desarrollos.backendparkspotter.report.dto.AdminReportResponse;
+import com.ucentral.desarrollos.backendparkspotter.report.dto.DriverReportResponse;
 import com.ucentral.desarrollos.backendparkspotter.report.dto.OwnerReportResponse;
 import com.ucentral.desarrollos.backendparkspotter.report.service.ReportService;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,14 @@ public class ReportController {
                                                      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
                                                      @RequestParam(required = false) UUID garageId) {
         return ResponseEntity.ok(reportService.ownerReport(owner, from, to, garageId));
+    }
+
+    /** Reporte personal del conductor (o de cualquier cuenta): sus reservas, gasto y garajes frecuentes. */
+    @GetMapping("/driver")
+    public ResponseEntity<DriverReportResponse> driver(@AuthenticationPrincipal UserAccount user,
+                                                       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+                                                       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ResponseEntity.ok(reportService.driverReport(user, from, to));
     }
 
     @PreAuthorize("hasRole('ADMIN')")

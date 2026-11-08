@@ -100,4 +100,37 @@ class ReportApiTest extends ApiTestSupport {
         perform(get("/api/v1/reports/owner"), driver).andExpect(status().isForbidden());
         perform(get("/api/v1/reports/admin"), owner).andExpect(status().isForbidden());
     }
+
+    @Test
+    void driverReport_SummarizesOwnReservationsOnly() throws Exception {
+        String completed = completedReservation(driver, owner, garage.id());
+        String cancelled = reserveId(driver, garage.id(), 120, 180);
+        performJson(post("/api/v1/reservations/" + cancelled + "/cancel"), driver, "{}");
+        UserAccount otherDriver = driver("otro-reportes@parkspotter.co");
+        completedReservation(otherDriver, owner, emptyGarage.id());
+
+        LocalDate to = LocalDate.now(ZoneId.of("America/Bogota")).plusDays(1);
+        perform(get("/api/v1/reports/driver").param("from", to.minusDays(6).toString()).param("to", to.toString()), driver)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalReservations").value(2))
+                .andExpect(jsonPath("$.paidReservations").value(1))
+                .andExpect(jsonPath("$.completed").value(1))
+                .andExpect(jsonPath("$.cancelled").value(1))
+                .andExpect(jsonPath("$.totalSpent").value(4000.0))
+                .andExpect(jsonPath("$.garagesUsed").value(1))
+                .andExpect(jsonPath("$.frequentGarages", hasSize(1)))
+                .andExpect(jsonPath("$.frequentGarages[0].name").value("Garaje Reportes"))
+                .andExpect(jsonPath("$.frequentGarages[0].spent").value(4000.0))
+                .andExpect(jsonPath("$.daily", hasSize(7)));
+
+        UserAccount newcomer = driver("nuevo-conductor-reportes@parkspotter.co");
+        perform(get("/api/v1/reports/driver"), newcomer)
+                .andExpect(jsonPath("$.totalReservations").value(0))
+                .andExpect(jsonPath("$.totalSpent").value(0.0))
+                .andExpect(jsonPath("$.daily", hasSize(30)));
+        perform(get("/api/v1/reports/driver").param("from", "2026-01-10").param("to", "2026-01-01"), driver)
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/v1/reports/driver")).andExpect(status().isUnauthorized());
+        org.assertj.core.api.Assertions.assertThat(completed).isNotBlank();
+    }
 }

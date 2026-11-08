@@ -1,0 +1,49 @@
+# Blueprint de Render (https://render.com/docs/blueprint-spec) para el backend de ParkSpotter.
+# Crea un Web Service gratuito que construye el Dockerfile de este repositorio. La base de datos NO va
+# aquí: es PostgreSQL en Neon (gratis y sin vencimiento). Guía completa: docs/Despliegue-Gratuito.md
+#
+# Las variables con "sync: false" las pide Render al crear el Blueprint (nunca se escriben en git).
+services:
+  - type: web
+    name: parkspotter-api
+    runtime: docker
+    plan: free
+    # Virginia (EE. UU. este): la región de Render más cercana a Bogotá. Crear la base de Neon en
+    # AWS us-east-1 (N. Virginia) para que app y base queden juntas.
+    region: virginia
+    branch: master
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/v1/health
+    # Solo despliega cuando la CI de GitHub (pruebas) terminó bien.
+    autoDeployTrigger: checksPass
+    envVars:
+      # --- Base de datos (Neon) ---
+      - key: DB_URL
+        sync: false   # jdbc:postgresql://<host-de-neon>/neondb?sslmode=require
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_POOL_SIZE
+        value: "5"
+      # --- Seguridad ---
+      - key: JWT_SECRET
+        generateValue: true
+      - key: APP_BOOTSTRAP_ROLES
+        value: "true"
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: APP_CORS_ALLOWED_ORIGINS
+        sync: false   # p. ej. https://parkspotter-web.vercel.app,https://*.vercel.app,http://localhost:3000
+      # --- Pagos ---
+      - key: PAYMENTS_PROVIDER
+        value: sandbox
+      - key: PAYMENTS_REDIRECT_PREFIXES
+        sync: false   # p. ej. https://parkspotter-web.vercel.app/,parkspotter://
+      - key: PAYMENTS_DEFAULT_REDIRECT
+        sync: false
+      - key: RESET_PASSWORD_URL
+        sync: false
+      # --- Memoria: el plan gratis tiene 512 MB ---
+      - key: JAVA_OPTS
+        value: "-XX:MaxRAMPercentage=65 -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -Xss512k -XX:+ExitOnOutOfMemoryError"

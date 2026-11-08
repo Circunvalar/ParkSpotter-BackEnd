@@ -64,7 +64,9 @@ export type DevicePlatform = 'ANDROID' | 'IOS' | 'WEB';
 export type NotificationType =
   | 'RESERVATION_CREATED' | 'RESERVATION_CONFIRMED' | 'RESERVATION_CANCELLED' | 'RESERVATION_EXPIRED'
   | 'RESERVATION_NO_SHOW' | 'RESERVATION_REMINDER' | 'CHECK_IN' | 'CHECK_OUT' | 'PAYMENT_DECLINED'
-  | 'NEW_REVIEW' | 'GARAGE_VERIFIED' | 'GARAGE_REJECTED' | 'ACCOUNT';
+  | 'NEW_REVIEW' | 'GARAGE_VERIFIED' | 'GARAGE_REJECTED' | 'SUPPORT_UPDATE' | 'ACCOUNT';
+export type TicketCategory = 'ACCOUNT' | 'RESERVATION' | 'PAYMENT' | 'GARAGE' | 'TECHNICAL' | 'OTHER';
+export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
 
 // ---------- autenticación y perfil ----------
 
@@ -149,6 +151,9 @@ export interface Garage {
   verified: boolean;
   averageRating: number;
   ratingCount: number;
+  /** Seguridad percibida (1 a 5), promedio de las reseñas que la calificaron. */
+  averageSecurityRating: number;
+  securityRatingCount: number;
   createdAt: Instant;
   updatedAt: Instant;
 }
@@ -226,6 +231,8 @@ export interface GarageDetail {
   verified: boolean;
   averageRating: number;
   ratingCount: number;
+  averageSecurityRating: number;
+  securityRatingCount: number;
   photos: GaragePhoto[];
   createdAt: Instant;
   updatedAt: Instant;
@@ -435,6 +442,8 @@ export interface Review {
   reservationId: UUID;
   rating: number;
   comment: string | null;
+  /** Seguridad percibida del lugar (1 a 5), opcional. */
+  securityRating: number | null;
   /** Solo el primer nombre del autor (o "Usuario"). */
   authorName: string;
   createdAt: Instant;
@@ -515,6 +524,81 @@ export interface AdminReport {
   averageSearchToReservationSeconds: number | null;
   topGarages: GarageReport[];
   daily: DailyPoint[];
+}
+
+export interface DriverReport {
+  from: LocalDate;
+  to: LocalDate;
+  currency: 'COP';
+  totalReservations: number;
+  paidReservations: number;
+  completed: number;
+  cancelled: number;
+  expired: number;
+  noShow: number;
+  /** Confirmadas que todavía no empiezan. */
+  upcoming: number;
+  totalSpent: number;
+  overtimeAmount: number;
+  parkedMinutes: number;
+  garagesUsed: number;
+  frequentGarages: Array<{ garageId: UUID; name: string; reservations: number; spent: number }>;
+  /** En el reporte del conductor, revenue es lo que gastó ese día. */
+  daily: DailyPoint[];
+}
+
+// ---------- soporte ----------
+
+export interface Faq {
+  id: string;
+  category: TicketCategory;
+  question: string;
+  answer: string;
+}
+
+export interface SupportContact {
+  email: string;
+  phone: string | null;
+  hours: string;
+}
+
+export interface TicketMessage {
+  id: UUID;
+  fromStaff: boolean;
+  /** "Soporte ParkSpotter" o el primer nombre del usuario. */
+  authorName: string;
+  body: string;
+  createdAt: Instant;
+}
+
+export interface SupportTicket {
+  id: UUID;
+  subject: string;
+  category: TicketCategory;
+  status: TicketStatus;
+  reservationId: UUID | null;
+  userId: UUID;
+  /** Solo llega a los administradores. */
+  userEmail: string | null;
+  messageCount: number;
+  /** Vacío en los listados; con la conversación en el detalle. */
+  messages: TicketMessage[];
+  resolvedAt: Instant | null;
+  createdAt: Instant;
+  updatedAt: Instant;
+}
+
+export interface CreateTicketRequest {
+  subject: string;
+  category: TicketCategory;
+  message: string;
+  reservationId?: UUID;
+}
+
+export interface Health {
+  status: 'UP' | 'DOWN';
+  database: 'UP' | 'DOWN';
+  time: Instant;
 }
 
 // ---------- almacenamiento de la sesión ----------
@@ -821,8 +905,9 @@ export class ParkSpotterApi {
   // ----- reseñas -----
 
   /** Solo reservas COMPLETED, una por reserva. rating de 1 a 5. */
-  reviewReservation(reservationId: UUID, rating: number, comment?: string): Promise<Review> {
-    return this.request('POST', `/api/v1/reservations/${reservationId}/review`, { body: { rating, comment } });
+  /** securityRating (1 a 5) es opcional: qué tan seguro se sintió el lugar. */
+  reviewReservation(reservationId: UUID, rating: number, comment?: string, securityRating?: number): Promise<Review> {
+    return this.request('POST', `/api/v1/reservations/${reservationId}/review`, { body: { rating, comment, securityRating } });
   }
 
   deleteReview(reviewId: UUID): Promise<void> {
@@ -866,6 +951,42 @@ export class ParkSpotterApi {
     return this.request('GET', '/api/v1/reports/admin', { query: { ...params } });
   }
 
+  /** Reporte personal del conductor: reservas, gasto, tiempo estacionado y garajes frecuentes. */
+  driverReport(params: { from?: LocalDate; to?: LocalDate } = {}): Promise<DriverReport> {
+    return this.request('GET', '/api/v1/reports/driver', { query: { ...params } });
+  }
+
+  // ----- soporte -----
+
+  faqs(category?: TicketCategory): Promise<Faq[]> {
+    return this.request('GET', '/api/v1/support/faqs', { query: { category }, auth: false });
+  }
+
+  supportContact(): Promise<SupportContact> {
+    return this.request('GET', '/api/v1/support/contact', { auth: false });
+  }
+
+  createTicket(request: CreateTicketRequest): Promise<SupportTicket> {
+    return this.request('POST', '/api/v1/support/tickets', { body: request });
+  }
+
+  myTickets(params: { status?: TicketStatus; page?: number; size?: number } = {}): Promise<Page<SupportTicket>> {
+    return this.request('GET', '/api/v1/support/tickets/mine', { query: { ...params } });
+  }
+
+  getTicket(ticketId: UUID): Promise<SupportTicket> {
+    return this.request('GET', `/api/v1/support/tickets/${ticketId}`);
+  }
+
+  replyTicket(ticketId: UUID, body: string): Promise<SupportTicket> {
+    return this.request('POST', `/api/v1/support/tickets/${ticketId}/messages`, { body: { body } });
+  }
+
+  /** Estado del servidor (público). Útil para mostrar "servidor despertando" en hostings gratuitos. */
+  health(): Promise<Health> {
+    return this.request('GET', '/api/v1/health', { auth: false });
+  }
+
   // ----- administración (rol ADMIN) -----
 
   adminUsers(params: { q?: string; role?: 'DRIVER' | 'OWNER' | 'ADMIN'; enabled?: boolean; page?: number; size?: number } = {}): Promise<Page<AdminUser>> {
@@ -887,6 +1008,14 @@ export class ParkSpotterApi {
 
   adminDecideVerification(garageId: UUID, approved: boolean, notes?: string): Promise<Garage> {
     return this.request('POST', `/api/v1/admin/garages/${garageId}/verification`, { body: { approved, notes } });
+  }
+
+  adminTickets(params: { status?: TicketStatus; page?: number; size?: number } = {}): Promise<Page<SupportTicket>> {
+    return this.request('GET', '/api/v1/admin/support/tickets', { query: { ...params } });
+  }
+
+  adminSetTicketStatus(ticketId: UUID, status: TicketStatus): Promise<SupportTicket> {
+    return this.request('PATCH', `/api/v1/admin/support/tickets/${ticketId}/status`, { body: { status } });
   }
 
   // ---------- infraestructura ----------

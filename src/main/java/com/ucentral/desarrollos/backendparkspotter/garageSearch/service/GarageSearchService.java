@@ -161,6 +161,8 @@ public class GarageSearchService {
                 garage.isVerified(),
                 garage.getAverageRating(),
                 garage.getRatingCount(),
+                garage.getAverageSecurityRating(),
+                garage.getSecurityRatingCount(),
                 photoRepository.findMetadataByGarageId(garageId),
                 garage.getCreatedAt(),
                 garage.getUpdatedAt()

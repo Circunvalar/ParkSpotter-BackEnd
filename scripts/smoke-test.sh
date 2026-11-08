@@ -238,6 +238,17 @@ request GET /notifications/unread-count "" "$DRIVER_TOKEN"
 expect_status 200 "Contador de notificaciones"
 request GET /reports/owner "" "$TOKEN"
 expect_status 200 "Reporte del propietario"
+request GET /reports/driver "" "$DRIVER_TOKEN"
+expect_contains '"totalReservations"' "Reporte del conductor"
+
+request GET /health
+expect_contains '"database":"UP"' "Health check con base de datos"
+request GET /support/faqs
+expect_status 200 "Preguntas frecuentes (público)"
+request POST /support/tickets "{\"subject\":\"Prueba smoke $RUN_ID\",\"category\":\"TECHNICAL\",\"message\":\"Caso creado por el smoke test\"}" "$DRIVER_TOKEN"
+expect_status 201 "Caso de soporte creado"
+request GET /support/tickets/mine "" "$DRIVER_TOKEN"
+expect_contains "Prueba smoke $RUN_ID" "Mis casos de soporte"
 
 request POST /auth/password/forgot "{\"email\":\"$DRIVER_EMAIL\"}"
 expect_status 202 "Recuperación de contraseña"

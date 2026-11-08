@@ -76,4 +76,12 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID>,
 
     @Query("SELECT r FROM Reservation r JOIN FETCH r.garage WHERE r.startTime >= :from AND r.startTime < :to")
     List<Reservation> findAllForReport(@Param("from") Instant from, @Param("to") Instant to);
+
+    /** Reservas de un conductor cuya franja empieza dentro del rango (reporte del conductor). */
+    @Query("""
+            SELECT r FROM Reservation r JOIN FETCH r.garage
+            WHERE r.driver.id = :driverId AND r.startTime >= :from AND r.startTime < :to
+            """)
+    List<Reservation> findDriverForReport(@Param("driverId") UUID driverId,
+                                          @Param("from") Instant from, @Param("to") Instant to);
 }

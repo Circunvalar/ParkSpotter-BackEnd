@@ -10,14 +10,14 @@ Un solo archivo, [`parkspotter-api.ts`](parkspotter-api.ts), sin dependencias. S
    ```bash
    # Vite: .env.development
    VITE_API_URL=http://localhost:8080
-   # Vite: .env.production (servidor en Azure; usar la URL real de la app)
-   VITE_API_URL=https://parkspotter-api.azurewebsites.net
+   # Vite: .env.production (servidor en Render; usar la URL real del servicio)
+   VITE_API_URL=https://parkspotter-api.onrender.com
    # Next.js: lo mismo con NEXT_PUBLIC_API_URL
    ```
 
    En producción la URL debe ser HTTPS: un front servido por HTTPS no puede llamar a una API por HTTP.
 
-3. Agregar el dominio del front a `APP_CORS_ALLOWED_ORIGINS` en el backend (Application settings de Azure; por ejemplo `https://parkspotter-web.vercel.app,http://localhost:3000`, sin `/` final). Detalles y requisitos en [docs/Conexion-Web-y-Movil.md](../../docs/Conexion-Web-y-Movil.md).
+3. Agregar el dominio del front a `APP_CORS_ALLOWED_ORIGINS` en el backend (Environment del servicio en Render; por ejemplo `https://parkspotter-web.vercel.app,https://*.vercel.app,http://localhost:3000`, sin `/` final). Detalles y requisitos en [docs/Conexion-Web-y-Movil.md](../../docs/Conexion-Web-y-Movil.md).
 
 ## 2. Crear una sola instancia
 
@@ -108,6 +108,23 @@ const { content } = await api.ownedReservations({ date: today, garageId });
 await api.checkIn('PS-7K3MQ2');
 await api.checkOut('PS-7K3MQ2');
 const report = await api.ownerReport({ from: '2026-05-01', to: '2026-05-31' });
+```
+
+### Conductor: reseña con seguridad, reporte y soporte
+
+```ts
+await api.reviewReservation(reservationId, 5, 'Muy bien', 4);   // el 4 (seguridad) es opcional
+const mine = await api.driverReport();                           // últimos 30 días
+const faqs = await api.faqs();                                   // público
+const ticket = await api.createTicket({ subject: 'No llegó el comprobante', category: 'PAYMENT', message: 'Pagué la reserva y no veo el comprobante' });
+await api.replyTicket(ticket.id, 'Adjunto la referencia PS-7K3MQ2-1');
+```
+
+### Servidor gratis dormido
+
+```ts
+// Antes de la primera pantalla: despierta la API (en Render Free puede tardar ~1 min).
+await api.health().catch(() => undefined);
 ```
 
 ### Fotos

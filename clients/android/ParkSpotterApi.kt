@@ -247,6 +247,37 @@ interface ParkSpotterApi {
     @GET("api/v1/reports/admin")
     suspend fun adminReport(@Query("from") from: String? = null, @Query("to") to: String? = null): AdminReport
 
+    @GET("api/v1/reports/driver")
+    suspend fun driverReport(@Query("from") from: String? = null, @Query("to") to: String? = null): DriverReport
+
+    // ---------- soporte ----------
+
+    @GET("api/v1/support/faqs")
+    suspend fun faqs(@Query("category") category: TicketCategory? = null): List<Faq>
+
+    @GET("api/v1/support/contact")
+    suspend fun supportContact(): SupportContact
+
+    @POST("api/v1/support/tickets")
+    suspend fun createTicket(@Body request: CreateTicketRequest): SupportTicket
+
+    @GET("api/v1/support/tickets/mine")
+    suspend fun myTickets(
+        @Query("status") status: TicketStatus? = null,
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 20,
+    ): Page<SupportTicket>
+
+    @GET("api/v1/support/tickets/{id}")
+    suspend fun getTicket(@Path("id") ticketId: String): SupportTicket
+
+    @POST("api/v1/support/tickets/{id}/messages")
+    suspend fun replyTicket(@Path("id") ticketId: String, @Body request: TicketMessageRequest): SupportTicket
+
+    /** Estado del servidor (público): sirve para mostrar "conectando con el servidor" mientras despierta. */
+    @GET("api/v1/health")
+    suspend fun health(): Health
+
     // ---------- administración (rol ADMIN) ----------
 
     @GET("api/v1/admin/users")
@@ -273,4 +304,14 @@ interface ParkSpotterApi {
 
     @POST("api/v1/admin/garages/{id}/verification")
     suspend fun adminDecideVerification(@Path("id") garageId: String, @Body request: VerificationDecisionRequest): Garage
+
+    @GET("api/v1/admin/support/tickets")
+    suspend fun adminTickets(
+        @Query("status") status: TicketStatus? = null,
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 20,
+    ): Page<SupportTicket>
+
+    @PATCH("api/v1/admin/support/tickets/{id}/status")
+    suspend fun adminSetTicketStatus(@Path("id") ticketId: String, @Body request: TicketStatusRequest): SupportTicket
 }
