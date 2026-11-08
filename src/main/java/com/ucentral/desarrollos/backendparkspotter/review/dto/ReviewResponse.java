@@ -10,6 +10,7 @@ public record ReviewResponse(
         UUID reservationId,
         int rating,
         String comment,
+        Integer securityRating,
         String authorName,
         Instant createdAt
 ) {

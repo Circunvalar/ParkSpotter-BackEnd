@@ -43,6 +43,8 @@ public record GarageDetailResponse(
         boolean verified,
         double averageRating,
         int ratingCount,
+        double averageSecurityRating,
+        int securityRatingCount,
         List<GaragePhotoResponse> photos,
 
         Instant createdAt,

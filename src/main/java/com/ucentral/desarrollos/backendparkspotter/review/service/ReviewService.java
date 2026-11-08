@@ -57,6 +57,7 @@ public class ReviewService {
         review.setAuthor(user);
         review.setRating(request.rating());
         review.setComment(request.comment() == null || request.comment().isBlank() ? null : request.comment().strip());
+        review.setSecurityRating(request.securityRating());
         Review saved = reviewRepository.saveAndFlush(review);
         refreshGarageRating(garage);
 
@@ -95,6 +96,10 @@ public class ReviewService {
         int count = ((Number) stats[1]).intValue();
         garage.setAverageRating(BigDecimal.valueOf(average).setScale(2, RoundingMode.HALF_UP).doubleValue());
         garage.setRatingCount(count);
+        Object[] security = unwrap(reviewRepository.securityStats(garage.getId()));
+        garage.setAverageSecurityRating(BigDecimal.valueOf(((Number) security[0]).doubleValue())
+                .setScale(2, RoundingMode.HALF_UP).doubleValue());
+        garage.setSecurityRatingCount(((Number) security[1]).intValue());
         garageRepository.save(garage);
     }
 
@@ -110,6 +115,7 @@ public class ReviewService {
                 review.getReservation().getId(),
                 review.getRating(),
                 review.getComment(),
+                review.getSecurityRating(),
                 firstName(review.getAuthor()),
                 review.getCreatedAt()
         );

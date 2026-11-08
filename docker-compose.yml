@@ -1,20 +1,45 @@
-# Backend en Docker para desarrollo local o pruebas. La base de datos es Azure SQL (externa), no un contenedor.
-# En producción la misma imagen corre en Azure App Service, que da el HTTPS (ver docs/Despliegue-Azure.md);
-# allí las variables van en Application settings y no se usa este archivo. Uso local:
-#   cp .env.example .env   # y completar los valores (DB_PASSWORD es obligatoria)
+# Backend + PostgreSQL en Docker para desarrollo local o pruebas (sin ninguna cuenta en la nube).
+# En producción la misma imagen corre en Render con la base en Neon (ver docs/Despliegue-Gratuito.md).
+# Uso local:
+#   cp .env.example .env   # completar DB_PASSWORD (cualquier contraseña: crea la base local con ella)
 #   docker compose up -d --build
-#   -> API en http://localhost:8080 (Swagger: /swagger-ui.html)
-# Para conectarse a Azure SQL desde esta computadora, su IP debe estar en el firewall del servidor SQL.
+#   -> API en http://localhost:8080 (Swagger: /swagger-ui.html, estado: /api/v1/health)
+# Los datos quedan en el volumen "pgdata" (docker compose down -v los borra).
 
 services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: parkspotter
+      POSTGRES_USER: parkspotter
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parkspotter -d parkspotter"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   api:
     build: .
     image: parkspotter-backend:latest
     restart: unless-stopped
-    # DB_PASSWORD (y opcionalmente DB_URL / DB_USERNAME) llegan desde .env
     env_file: .env
     environment:
+      # Dentro de Docker la base se llama "db"; esto reemplaza DB_URL del .env.
+      DB_URL: jdbc:postgresql://db:5432/parkspotter
+      DB_USERNAME: parkspotter
       DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en .env}
       APP_BOOTSTRAP_ROLES: "true"
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "8080:8080"
+
+volumes:
+  pgdata:

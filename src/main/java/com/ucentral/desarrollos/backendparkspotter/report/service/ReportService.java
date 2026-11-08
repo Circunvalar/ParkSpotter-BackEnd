@@ -9,6 +9,7 @@ import com.ucentral.desarrollos.backendparkspotter.garageManagement.entity.Verif
 import com.ucentral.desarrollos.backendparkspotter.garageManagement.repository.GarageRepository;
 import com.ucentral.desarrollos.backendparkspotter.report.dto.AdminReportResponse;
 import com.ucentral.desarrollos.backendparkspotter.report.dto.DailyPoint;
+import com.ucentral.desarrollos.backendparkspotter.report.dto.DriverReportResponse;
 import com.ucentral.desarrollos.backendparkspotter.report.dto.GarageReport;
 import com.ucentral.desarrollos.backendparkspotter.report.dto.OwnerReportResponse;
 import com.ucentral.desarrollos.backendparkspotter.report.dto.ReportSummary;
@@ -109,6 +110,52 @@ public class ReportService {
                 summary(reservations, garages, range),
                 searchSeconds.isPresent() ? round(searchSeconds.getAsDouble(), 1) : null,
                 top, daily(reservations, range));
+    }
+
+    /**
+     * Reporte del conductor (RF-10, "reportes básicos para usuarios"): cuántas reservas hizo, cuánto pagó,
+     * cuánto tiempo estuvo estacionado y en qué garajes. Con el rango por defecto incluye lo de hoy.
+     */
+    @Transactional(readOnly = true)
+    public DriverReportResponse driverReport(UserAccount driver, LocalDate from, LocalDate to) {
+        Range range = range(from, to);
+        List<Reservation> reservations = reservationRepository.findDriverForReport(driver.getId(), range.start(), range.end());
+        List<Reservation> paid = reservations.stream().filter(ReportService::isPaid).toList();
+        BigDecimal spent = paid.stream().map(Reservation::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal overtime = reservations.stream().map(Reservation::getOvertimeAmount).reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+        long parkedMinutes = reservations.stream()
+                .filter(r -> r.getCheckInAt() != null && r.getCheckOutAt() != null)
+                .mapToLong(r -> Math.max(0, Duration.between(r.getCheckInAt(), r.getCheckOutAt()).toMinutes()))
+                .sum();
+        Instant now = clock.instant();
+        long upcoming = count(reservations, r -> r.getStatus() == ReservationStatus.CONFIRMED && r.getStartTime().isAfter(now));
+
+        Map<UUID, List<Reservation>> byGarage = new LinkedHashMap<>();
+        paid.forEach(r -> byGarage.computeIfAbsent(r.getGarage().getId(), id -> new java.util.ArrayList<>()).add(r));
+        List<DriverReportResponse.FrequentGarage> frequent = byGarage.values().stream()
+                .map(list -> new DriverReportResponse.FrequentGarage(
+                        list.get(0).getGarage().getId(), list.get(0).getGarage().getName(), list.size(), revenue(list)))
+                .sorted(Comparator.comparingLong(DriverReportResponse.FrequentGarage::reservations).reversed()
+                        .thenComparing(DriverReportResponse.FrequentGarage::spent, Comparator.reverseOrder()))
+                .limit(5)
+                .toList();
+
+        return new DriverReportResponse(range.from(), range.to(), CURRENCY,
+                reservations.size(),
+                paid.size(),
+                count(reservations, r -> r.getStatus() == ReservationStatus.COMPLETED),
+                count(reservations, r -> r.getStatus() == ReservationStatus.CANCELLED),
+                count(reservations, r -> r.getStatus() == ReservationStatus.EXPIRED),
+                count(reservations, r -> r.getStatus() == ReservationStatus.NO_SHOW),
+                upcoming,
+                spent,
+                overtime,
+                parkedMinutes,
+                byGarage.size(),
+                frequent,
+                daily(reservations, range));
     }
 
     // ---------- cálculo ----------

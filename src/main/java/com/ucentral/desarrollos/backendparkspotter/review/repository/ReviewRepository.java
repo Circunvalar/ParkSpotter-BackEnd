@@ -21,4 +21,8 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
     /** [promedio, cantidad] de las calificaciones del garaje. */
     @Query("SELECT COALESCE(AVG(r.rating), 0), COUNT(r) FROM Review r WHERE r.garage.id = :garageId")
     Object[] ratingStats(@Param("garageId") UUID garageId);
+
+    /** [promedio, cantidad] de la calificación de seguridad (solo reseñas que la incluyen). */
+    @Query("SELECT COALESCE(AVG(r.securityRating), 0), COUNT(r.securityRating) FROM Review r WHERE r.garage.id = :garageId")
+    Object[] securityStats(@Param("garageId") UUID garageId);
 }

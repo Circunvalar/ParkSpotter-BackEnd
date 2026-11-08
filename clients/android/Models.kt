@@ -45,8 +45,10 @@ enum class ManagedRole { DRIVER, OWNER, ADMIN }
 enum class NotificationType {
     RESERVATION_CREATED, RESERVATION_CONFIRMED, RESERVATION_CANCELLED, RESERVATION_EXPIRED,
     RESERVATION_NO_SHOW, RESERVATION_REMINDER, CHECK_IN, CHECK_OUT, PAYMENT_DECLINED,
-    NEW_REVIEW, GARAGE_VERIFIED, GARAGE_REJECTED, ACCOUNT,
+    NEW_REVIEW, GARAGE_VERIFIED, GARAGE_REJECTED, SUPPORT_UPDATE, ACCOUNT,
 }
+enum class TicketCategory { ACCOUNT, RESERVATION, PAYMENT, GARAGE, TECHNICAL, OTHER }
+enum class TicketStatus { OPEN, IN_PROGRESS, RESOLVED, CLOSED }
 
 // ---------- autenticación y perfil ----------
 
@@ -140,6 +142,8 @@ data class Garage(
     val verified: Boolean,
     val averageRating: Double,
     val ratingCount: Int,
+    val averageSecurityRating: Double,
+    val securityRatingCount: Int,
     val createdAt: String,
     val updatedAt: String,
 )
@@ -209,6 +213,8 @@ data class GarageDetail(
     val verified: Boolean,
     val averageRating: Double,
     val ratingCount: Int,
+    val averageSecurityRating: Double,
+    val securityRatingCount: Int,
     val photos: List<GaragePhoto>,
     val createdAt: String,
     val updatedAt: String,
@@ -369,7 +375,8 @@ data class Receipt(
 
 // ---------- reseñas, notificaciones, admin y reportes ----------
 
-data class ReviewRequest(val rating: Int, val comment: String? = null)
+/** securityRating (1 a 5) es opcional: qué tan seguro se sintió el lugar. */
+data class ReviewRequest(val rating: Int, val comment: String? = null, val securityRating: Int? = null)
 
 data class Review(
     val id: String,
@@ -377,6 +384,7 @@ data class Review(
     val reservationId: String,
     val rating: Int,
     val comment: String?,
+    val securityRating: Int?,
     val authorName: String,
     val createdAt: String,
 )
@@ -461,3 +469,61 @@ data class AdminReport(
     data class Users(val total: Long, val drivers: Long, val owners: Long, val admins: Long, val disabled: Long, val newInRange: Long)
     data class Garages(val total: Long, val active: Long, val verified: Long, val pendingVerification: Long)
 }
+
+/** Reporte personal del conductor. En daily, revenue es lo que gastó ese día. */
+data class DriverReport(
+    val from: String,
+    val to: String,
+    val currency: String,
+    val totalReservations: Long,
+    val paidReservations: Long,
+    val completed: Long,
+    val cancelled: Long,
+    val expired: Long,
+    val noShow: Long,
+    val upcoming: Long,
+    val totalSpent: Double,
+    val overtimeAmount: Double,
+    val parkedMinutes: Long,
+    val garagesUsed: Long,
+    val frequentGarages: List<FrequentGarage>,
+    val daily: List<DailyPoint>,
+) {
+    data class FrequentGarage(val garageId: String, val name: String, val reservations: Long, val spent: Double)
+}
+
+// ---------- soporte ----------
+
+data class Faq(val id: String, val category: TicketCategory, val question: String, val answer: String)
+
+data class SupportContact(val email: String, val phone: String?, val hours: String)
+
+data class CreateTicketRequest(
+    val subject: String,
+    val category: TicketCategory,
+    val message: String,
+    val reservationId: String? = null,
+)
+
+data class TicketMessageRequest(val body: String)
+
+data class TicketStatusRequest(val status: TicketStatus)
+
+data class SupportTicket(
+    val id: String,
+    val subject: String,
+    val category: TicketCategory,
+    val status: TicketStatus,
+    val reservationId: String?,
+    val userId: String,
+    val userEmail: String?,
+    val messageCount: Int,
+    val messages: List<TicketMessage>,
+    val resolvedAt: String?,
+    val createdAt: String,
+    val updatedAt: String,
+) {
+    data class TicketMessage(val id: String, val fromStaff: Boolean, val authorName: String, val body: String, val createdAt: String)
+}
+
+data class Health(val status: String, val database: String, val time: String)

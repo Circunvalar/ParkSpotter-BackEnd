@@ -147,6 +147,15 @@ public class Garage {
     @Column(name = "rating_count", nullable = false)
     private Integer ratingCount = 0;
 
+    /** Seguridad percibida: promedio y cantidad de reseñas que la calificaron (opcional en cada reseña). */
+    @ColumnDefault("0")
+    @Column(name = "average_security_rating", nullable = false)
+    private Double averageSecurityRating = 0.0;
+
+    @ColumnDefault("0")
+    @Column(name = "security_rating_count", nullable = false)
+    private Integer securityRatingCount = 0;
+
     // --- Plazas ---
 
     @OneToMany(mappedBy = "garage", cascade = CascadeType.ALL, orphanRemoval = true)

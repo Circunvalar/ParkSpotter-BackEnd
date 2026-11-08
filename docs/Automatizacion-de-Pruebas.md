@@ -20,16 +20,16 @@ push / pull request
         ▼
 ┌─────────────────────────────── job: pruebas (≈ 3 min) ───────────────────────────────┐
 │ Java 21 + caché de Maven                                                              │
-│ ./mvnw verify  →  326 pruebas (unitarias, H2, API, servidor HTTP real, rendimiento)   │
+│ ./mvnw verify  →  413 pruebas (unitarias, H2, API, servidor HTTP real, rendimiento)   │
 │               →  JaCoCo exige líneas ≥ 90 %, ramas ≥ 85 %, métodos ≥ 95 %             │
 │ Resumen en la página de la ejecución + reportes descargables                          │
 └───────────────────────────────────────────────────────────────────────────────────────┘
         │ (solo si todo pasó)
         ▼
 ┌──────────────────────── job: e2e (≈ 2 min) ────────────────────────┐
-│ SQL Server 2022 (motor de Azure SQL) en un contenedor temporal     │
+│ PostgreSQL 16 (el motor de producción, Neon) en un contenedor      │
 │ Levanta la API real (el mismo jar del job anterior)                │
-│ scripts/smoke-test.sh → 44 verificaciones de punta a punta         │
+│ scripts/smoke-test.sh → 71 verificaciones de punta a punta         │
 │ Si falla, guarda el log de la API                                  │
 └────────────────────────────────────────────────────────────────────┘
 ```
@@ -68,12 +68,12 @@ python scripts/ci-summary.py
 ```
 El primer comando corre las pruebas y la cobertura (igual que el job `pruebas`); el segundo muestra el mismo resumen que la CI.
 
-Para la prueba de punta a punta (igual que el job `e2e`) se necesita un SQL Server de pruebas (por ejemplo `docker run -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD=... -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest` y luego `CREATE DATABASE parkspotter_test`). **Nunca uses la base de Azure de producción**:
+Para la prueba de punta a punta (igual que el job `e2e`) se necesita un PostgreSQL de pruebas (por ejemplo `docker run -d -e POSTGRES_DB=parkspotter_test -e POSTGRES_USER=parkspotter -e POSTGRES_PASSWORD=tu_clave_local -p 5432:5432 postgres:16`). **Nunca uses la base de producción (Neon)**:
 
 ```bash
 ./mvnw -DskipTests package
-SPRING_DATASOURCE_URL='jdbc:sqlserver://localhost:1433;database=parkspotter_test;encrypt=true;trustServerCertificate=true' \
-SPRING_DATASOURCE_USERNAME=sa SPRING_DATASOURCE_PASSWORD=tu_clave_local \
+SPRING_DATASOURCE_URL='jdbc:postgresql://localhost:5432/parkspotter_test' \
+SPRING_DATASOURCE_USERNAME=parkspotter SPRING_DATASOURCE_PASSWORD=tu_clave_local \
 ./scripts/e2e.sh
 ```
 
@@ -95,7 +95,7 @@ En Windows estos scripts funcionan en **Git Bash**.
 
 ## Despliegue después de la CI
 
-Cuando la CI termina bien en `master`, el workflow [`deploy-azure.yml`](../.github/workflows/deploy-azure.yml) publica la imagen Docker en GitHub Container Registry y, si está configurado, actualiza la app en Azure App Service. Si la CI falla, no se despliega nada. Detalles en [Despliegue-Azure.md](Despliegue-Azure.md#11-despliegue-automático-desde-github-opcional).
+Render despliega `master` solo cuando la CI terminó bien (`autoDeployTrigger: checksPass` en [`render.yaml`](../render.yaml)). Además, el workflow [`deploy.yml`](../.github/workflows/deploy.yml) publica la imagen Docker en GitHub Container Registry y, si existe el secreto `RENDER_DEPLOY_HOOK_URL`, avisa a Render. Si la CI falla, no se despliega nada. Detalles en [Despliegue-Gratuito.md](Despliegue-Gratuito.md#6-despliegues-automáticos).
 
 ## Herramientas gratuitas opcionales para más adelante
 

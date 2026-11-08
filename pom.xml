@@ -54,7 +54,13 @@
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>${springdoc.version}</version>
         </dependency>
-        <!-- Driver de SQL Server / Azure SQL (la versión la gestiona Spring Boot) -->
+        <!-- Driver de PostgreSQL: base recomendada para el hosting gratuito (Neon, Supabase o local con Docker) -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- Driver de SQL Server: se conserva por si la base vuelve a ser SQL Server (la versión la gestiona Spring Boot) -->
         <dependency>
             <groupId>com.microsoft.sqlserver</groupId>
             <artifactId>mssql-jdbc</artifactId>

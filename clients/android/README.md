@@ -62,7 +62,7 @@ class App : Application() {
 }
 ```
 
-`BuildConfig.API_URL` se define en cada `buildType`: en `debug`, `"http://10.0.2.2:8080/"`; en `release`, la URL HTTPS del servidor en Azure, por ejemplo `buildConfigField("String", "API_URL", "\"https://parkspotter-api.azurewebsites.net/\"")`. Android bloquea HTTP en producción, así que `release` siempre usa HTTPS. Ejemplo completo y requisitos en [docs/Conexion-Web-y-Movil.md](../../docs/Conexion-Web-y-Movil.md#4-app-android).
+`BuildConfig.API_URL` se define en cada `buildType`: en `debug`, `"http://10.0.2.2:8080/"`; en `release`, la URL HTTPS del servidor en Render, por ejemplo `buildConfigField("String", "API_URL", "\"https://parkspotter-api.onrender.com/\"")`. Android bloquea HTTP en producción, así que `release` siempre usa HTTPS. Ejemplo completo y requisitos en [docs/Conexion-Web-y-Movil.md](../../docs/Conexion-Web-y-Movil.md#4-app-android).
 
 ## 5. Ejemplos (desde un ViewModel)
 
@@ -138,7 +138,7 @@ override fun onStop() {
 3. Al cerrar sesión: `api.unregisterDevice(token)` y luego `api.logout(RefreshRequest(refreshToken))`.
 4. En `onMessageReceived`, `message.data["type"]` y `message.data["referenceId"]` dicen qué pantalla abrir.
 
-El backend envía los push solo si tiene las credenciales de Firebase (`FCM_*`, ver la [guía de despliegue](../../docs/Despliegue-Azure.md#notificaciones-push-con-firebase-manual)). Sin ellas, la bandeja (`api.notifications()`) funciona igual.
+El backend envía los push solo si tiene las credenciales de Firebase (`FCM_*`, ver la [guía de despliegue](../../docs/Despliegue-Gratuito.md#notificaciones-push-con-firebase-manual)). Sin ellas, la bandeja (`api.notifications()`) funciona igual.
 
 ### Fotos
 
@@ -150,6 +150,18 @@ api.uploadPhoto(garageId, part)
 // Mostrar con Coil:
 AsyncImage(model = BuildConfig.API_URL.trimEnd('/') + photo.url, contentDescription = null)
 ```
+
+### Reseña con seguridad, reporte del conductor y soporte
+
+```kotlin
+api.reviewReservation(reservationId, ReviewRequest(rating = 5, comment = "Muy bien", securityRating = 4))
+val report = api.driverReport()
+val faqs = api.faqs()
+val ticket = api.createTicket(CreateTicketRequest("No llegó el comprobante", TicketCategory.PAYMENT, "Pagué y no veo el comprobante"))
+api.replyTicket(ticket.id, TicketMessageRequest("Referencia PS-7K3MQ2-1"))
+```
+
+Al tocar una notificación `SUPPORT_UPDATE`, abrir `api.getTicket(referenceId)`. Con el servidor gratis dormido, llamar `api.health()` al abrir la app (puede tardar cerca de un minuto la primera vez).
 
 ### Código de reserva como QR
 

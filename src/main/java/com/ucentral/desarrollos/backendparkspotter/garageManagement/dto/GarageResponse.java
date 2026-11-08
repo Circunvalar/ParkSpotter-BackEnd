@@ -45,6 +45,8 @@ public record GarageResponse(
         boolean verified,
         double averageRating,
         int ratingCount,
+        double averageSecurityRating,
+        int securityRatingCount,
 
         Instant createdAt,
         Instant updatedAt

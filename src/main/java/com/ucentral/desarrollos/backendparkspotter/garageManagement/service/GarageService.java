@@ -239,6 +239,8 @@ public class GarageService {
                 garage.isVerified(),
                 garage.getAverageRating(),
                 garage.getRatingCount(),
+                garage.getAverageSecurityRating(),
+                garage.getSecurityRatingCount(),
                 garage.getCreatedAt(),
                 garage.getUpdatedAt()
         );
